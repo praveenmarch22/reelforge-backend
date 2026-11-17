@@ -1,0 +1,22 @@
+# Secrets and local settings
+.env
+.env.local
+.env.*.local
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# Generated media and render output
+renderer/out/
+renderer/public/projects/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

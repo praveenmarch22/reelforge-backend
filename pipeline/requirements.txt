@@ -1,0 +1,8 @@
+requests==2.32.3
+python-dotenv==1.0.1
+pydantic==2.10.6
+Pillow==11.1.0
+mutagen==1.47.0
+edge-tts==7.3.1
+# Optional: only needed when VIDEO_PROVIDERS includes hf_space
+# gradio_client==1.7.2

@@ -778,7 +778,7 @@ GET /api/v1/posts/…
 |---|---|---|
 | POST | /auth/signup | email, password, name → sends verification email |
 | POST | /auth/verify-email | token |
-| POST | /auth/resend-verification | email |
+| POST | /auth/resend-verification | no body; for the signed-in user |
 | POST | /auth/login | sets access and refresh cookies |
 | POST | /auth/refresh | rotates refresh token |
 | POST | /auth/logout | revokes refresh token |

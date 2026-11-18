@@ -39,7 +39,7 @@ Of the 52 creator-facing endpoints, 49 are needed for version 1 (P0) and 3 are P
 | Format | JSON. Field names `camelCase` in JSON, `snake_case` in Python and the database |
 | IDs | UUIDs |
 | Times | ISO 8601 UTC, for example `2026-11-11T09:30:00Z` |
-| Auth | httpOnly cookies `rf_access` (15 min) and `rf_refresh` (30 days, path `/api/v1/auth`). Every POST, PATCH and DELETE sends `X-CSRF-Token` (value from the `rf_csrf` cookie) |
+| Auth | httpOnly cookies `rf_access` (15 min) and `rf_refresh` (30 days, path `/api/v1/auth`). Every POST, PATCH and DELETE sends `X-CSRF-Token` (value from the `rf_csrf` cookie). The server checks it only on endpoints that need a session; the Public endpoints (signup, login, refresh, verify-email, forgot-password, reset-password) ignore it, because no `rf_csrf` cookie exists before the first login. `rf_csrf` is readable by JavaScript and set for the parent domain, so the web app can read it when the API is on `api.<domain>` |
 | Auth levels in this document | **Public**: no login. **User**: logged in. **Verified**: logged in and email verified. **Admin**: `is_admin`. **Internal**: private network with a shared secret |
 | Slow work | `202 Accepted` with job ids; the client polls `GET /jobs/:id` or `GET /projects/:id` every 2 s |
 | Pagination | `?limit=20&cursor=…` (max 100). Response: `{"items": [...], "nextCursor": "…" or null}` |
@@ -70,6 +70,7 @@ Of the 52 creator-facing endpoints, 49 are needed for version 1 (P0) and 3 are P
 | 403 | `csrf_failed` | Missing or wrong CSRF token |
 | 404 | `not_found` | Missing or not yours |
 | 409 | `email_taken` | Sign-up with an existing email |
+| 409 | `already_verified` | Resend verification when the email is already verified |
 | 409 | `already_running` | Same job already active |
 | 409 | `not_ready` | Render with scenes not ready; `details.scenes` |
 | 409 | `too_long` | Timeline over 90 s; `details.seconds` |
@@ -106,6 +107,8 @@ These appear in many responses.
 ```
 
 `durationSeconds` and `thumbnailUrl` are null until they exist. `progress` is 0–100 while the status is `scripting`, `generating`, `rendering` or `posting`, otherwise null.
+
+`status` is one of the 11 project statuses in [DB_DESIGN.md](DB_DESIGN.md): `scripting`, `draft`, `generating`, `needs_attention`, `ready`, `rendering`, `render_failed`, `rendered`, `posting`, `post_failed`, `posted`. The PRD's shorter list (D1) is the creator-facing grouping: the web app shows `render_failed` and `post_failed` as "Failed", and groups `scripting` with drafts in the library filter while still showing its progress. Lists are sorted by `updatedAt`, newest first. Text fields that have no value yet (for example `niche`, `defaults.voiceId`) are empty strings, never null.
 
 **Project** (full): ProjectSummary plus `topic`, `tone`, `style`, `character`, `voiceId`, `musicMood`, `music` (`{"trackId"}` or `{"assetId"}` or null), `settings`, `estimatedSeconds`, `timelineVersion`, `postCaption`, `hashtags`, `scenes` (array of Scene), `activeJobs` (array of Job), `latestRender` (Render or null), `latestPost` (Post or null), `createdAt`.
 
@@ -154,9 +157,9 @@ URLs to media are presigned and valid for 2 hours.
 - Errors: `400 validation_error`, `409 email_taken`, `429`.
 - Side effects: `credit_accounts` row with the allowance; verification token emailed (24 h).
 
-**A2. `POST /auth/verify-email`**: Public. Body: `token`. `200` → `{"user": User}`. Errors: `410 token_invalid`.
+**A2. `POST /auth/verify-email`**: Public. Body: `token`. `200` → `{"user": User}` and session cookies (opening the link signs the user in on that browser, so it also works on a different device from the one used to sign up). Errors: `410 token_invalid`.
 
-**A3. `POST /auth/resend-verification`**: User. No body. `204`. Limited to 3 per hour. Error `409` if already verified.
+**A3. `POST /auth/resend-verification`**: User. No body (the email comes from the session; this replaces the `email` body mentioned in the technical design). `204`. Limited to 3 per hour. Errors: `409 already_verified`, `429 rate_limited`.
 
 **A4. `POST /auth/login`**: Public. Body: `email`, `password`. `200` → `{"user": User}` and cookies. Errors: `401 invalid_credentials` (same message for unknown email), `403 account_disabled`, `429` (5 per minute per IP and per email).
 

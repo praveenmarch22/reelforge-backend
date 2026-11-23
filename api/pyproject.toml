@@ -12,6 +12,7 @@ ignore = ["S101"]  # assert is fine in tests
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+cache_dir = "/tmp/pytest-cache"
 addopts = "-ra"
 markers = ["worker: needs a running Celery worker"]
 filterwarnings = [

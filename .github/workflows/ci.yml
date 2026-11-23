@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Baseline migration matches the documented schema
         run: diff -u docs/schema.sql api/migrations/versions/0001_baseline.sql

@@ -3,7 +3,11 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    FLASK_APP=wsgi:app
+    FLASK_APP=wsgi:app \
+    RUFF_CACHE_DIR=/tmp/ruff-cache
+
+# Tool caches go to /tmp, not the source folder: when the source is mounted from the host
+# (local development, CI) the container's user may not be allowed to write there.
 
 WORKDIR /app
 

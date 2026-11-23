@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | Owner | QA |
-| Last updated | 2026-11-18 |
-| Covers so far | Frontend milestones F1, F2, F3 |
+| Last updated | 2026-11-23 |
+| Covers so far | Frontend milestones F1, F2, F3, F4 |
 | Related | [PRD](../PRD.md), [API design](../API_DESIGN.md), [UI review](../UI_REVIEW.md), [Stitch prompts](../STITCH_PROMPTS.md), [Milestones](../../MILESTONES.md), [Status](../../PROJECT_STATUS.md) |
 
 This plan is kept current as milestones are added. Test cases and reports are per milestone group: `TEST_CASES_<milestones>.md`, `QA_REPORT_<milestones>.md`.
@@ -18,8 +18,9 @@ This plan is kept current as milestones are added. Test cases and reports are pe
 | F1 | App starts, type-check and build pass, design tokens, UI kit, router, API client conventions, mock API against the API design |
 | F2 | Login, sign up, check-your-email / verify, forgot password, set new password, route guards, session refresh |
 | F3 | App shell (sidebar, account menu, credits and Instagram pills), dashboard (with empty state), projects library (search, filters, delete) |
+| F4 | Onboarding: the gate that sends a new verified user there once, the niche, voice and Instagram steps, every way of skipping, what reaches the profile, the Instagram round trip (API F1, F2) through the mock stand-in page, and the F1-F3 flows again with the gate in place |
 
-**Out of scope until built**: onboarding (F4), New Reel and script editor (F5), Reel editor (F6), render and publish (F7), settings, credits history and admin (F8). These routes show a "not built yet" placeholder on purpose. The backend (track B) does not exist; everything runs against the mock API.
+**Out of scope until built**: New Reel and script editor (F5), Reel editor (F6), render and publish (F7), settings, credits history and admin (F8). These routes show a "not built yet" placeholder on purpose. The backend (track B) does not exist; everything runs against the mock API.
 
 **Deferred by the milestones document to F9**: phone-width layouts, the keyboard and screen-reader pass, 404 and error pages, automated tests. QA still looks at these early and reports what it finds in a separate "deferred" section, so the F9 work starts from a list. They do not count towards a milestone verdict before F9.
 
@@ -42,6 +43,8 @@ Every finding cites the requirement it breaks. Ambiguities and contradictions be
 | Responsive | 390×844 (phone), 768×1024 (tablet), 1280×800, 1440×900, 1920×1080; full-page screenshots looked at by eye plus an automatic check for horizontal overflow | Every milestone; verdict-relevant from F9 |
 | Keyboard and accessibility basics | Tab order, focus visibility, focus after dialogs and menus, labels, landmarks, reduced motion, contrast of small text (calculated) | Every milestone; verdict-relevant from F9 |
 | Multi-tab and history | Two tabs in one context, back/forward, reload on every screen | Every milestone with auth or editing |
+| Redirect round trips | Any flow that leaves the app and comes back (Instagram connect): missing, wrong, reused and superseded `state`, a different user finishing, crafted return addresses. Other sites are answered locally by the test (`context.route`), so nothing leaves the machine | F4, F7, F8 |
+| Production build | Build with mocks off into the QA scratch folder and search the bundle for mock-only code and routes | Every milestone that adds mock-only screens |
 
 ### How failures are simulated
 
@@ -52,7 +55,7 @@ The mock API is an MSW service worker. Playwright's `page.route` does not see re
 | | State |
 |---|---|
 | QA exploratory scripts | Scripted but not a regression suite. They live in the QA scratch folder and print observations for a person to judge |
-| Unit and component tests (Vitest), end-to-end tests (Playwright, `frontend/e2e`) | Being written by the developer side; owned there, not by QA. QA does not run or rely on them yet. Once stable, the cases in the test-case document marked "candidate for automation" should be covered there |
+| Unit and component tests (Vitest), end-to-end tests (Playwright, `frontend/e2e`) | Owned by the Tester role, which works at the same time as QA on each milestone. QA does not run or rely on them; the cases in the test-case documents marked as candidates for automation are suggestions for that suite |
 | Visual comparison with Stitch | Manual, by the product owner; QA covers only the text |
 
 ## 4. Environments
@@ -69,6 +72,9 @@ The mock API is an MSW service worker. Playwright's `page.route` does not see re
 - Chromium only. The PRD also names Edge, Safari and Firefox; none of those were tested.
 - No real backend: cookies, real CSRF checks, real token expiry after 15 minutes, rate limits, email delivery and lockout cannot be exercised. Where it matters they are simulated and marked as such.
 - The mock database belongs to one browser profile, so "open the email link on another device" cannot succeed in mock mode.
+- Instagram is a stand-in page inside the app (`/mock/instagram`). Instagram's real screens, the real callback (API F2), the 10-minute life of `state` and real token storage cannot be exercised.
+- The dev server keeps a live-reload connection open and the mock API runs in a service worker; both stop Chromium from restoring a page from its back/forward cache. Behaviour that depends on that cache (pressing Back on another site and returning to a page exactly as it was left) can only be reasoned about from the code until there is a production-like build with a backend.
+- The Tester's automated suite runs against the same dev server at the same time, so page loads are slow; timings in QA scripts are generous and are not performance measurements.
 
 ## 5. Entry and exit criteria
 
@@ -101,3 +107,6 @@ The mock API is an MSW service worker. Playwright's `page.route` does not see re
 - Session handling: several F1–F3 findings are about what happens when the session ends. The editor (F6) depends on this for PRD A-4 (autosave, then return to the same project).
 - Phone width: the dashboard prompt is already unusable at 390 px. Screens in F5–F7 are denser.
 - Credits: the balance currently comes from `GET /me` only and is cached; once actions spend credits (F5) it must stay correct.
+- The cached user: every profile change writes the server's answer into the cached user, and the route guards act on that cache. F4 showed that an answer arriving out of order can send the user to the wrong screen (QA-029). Settings (F8) changes the same object from more places.
+- Return addresses: `returnTo` in API F1 is the first place the API accepts a path to redirect to. The rule in the document must be exact before the backend is written (QA-026), and Settings (F8) and publish (F7) will use it too.
+- Results that arrive in the URL (`?instagram=…`): they stay in the address bar and in history, and the gate can drop them (QA-027). The Settings dialogs (F7/F8) read the same parameters.

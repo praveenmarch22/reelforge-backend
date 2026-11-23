@@ -173,7 +173,7 @@ URLs to media are presigned and valid for 2 hours.
 
 **A9. `GET /me`**: User. `200` → `{"user": User}`. The web app calls this on load.
 
-**A10. `PATCH /me`**: User. Body (all optional): `name`, `niche`, `defaults.voiceId`, `defaults.captionStyle`, `defaults.mode`, `onboardingCompleted` (true only). `200` → `{"user": User}`.
+**A10. `PATCH /me`**: User. Body (all optional): `name`, `niche`, `defaults.voiceId`, `defaults.captionStyle`, `defaults.mode`, `onboardingCompleted` (true only). `200` → `{"user": User}`. `niche` is one text value of up to 120 characters; the web app stores up to three topics in it, separated by commas (for example `Fitness, Finance, gardening`).
 
 **A11. `POST /me/password`**: User. Body: `currentPassword`, `newPassword`. `204`; other sessions revoked. Errors: `401 invalid_credentials`, `400`.
 
@@ -271,11 +271,11 @@ URLs to media are presigned and valid for 2 hours.
 
 ### F. Instagram and posts (6)
 
-**F1. `GET /instagram/connect`**: Verified. `200` → `{"authorizeUrl": "https://www.instagram.com/oauth/authorize?…"}`. The web app redirects the browser there. Includes a signed `state` valid 10 minutes.
+**F1. `GET /instagram/connect`**: Verified. Query: `returnTo` (optional; the app page to come back to, for example `/onboarding?step=3`; must be a path inside the web app starting with a single `/`, otherwise it is ignored; default `/app/settings`). `200` → `{"authorizeUrl": "https://www.instagram.com/oauth/authorize?…"}`. The web app redirects the browser there. Includes a signed `state` valid 10 minutes, which also carries `returnTo`. Errors: `403 email_not_verified`.
 
 **F2. `GET /instagram/callback`**: Public (called by Instagram's redirect). Query: `code`, `state`, or `error`.
 - Verifies `state`, exchanges the code for a long-lived token, checks the account type, stores the encrypted token.
-- Always redirects (`302`) to the web app: `/app/settings?instagram=connected`, or `?instagram=error&reason=personal_account|denied|not_tester|failed`.
+- Always redirects (`302`) to the web app, to the `returnTo` page from F1 with the result added to its query string: `instagram=connected`, or `instagram=error&reason=personal_account|denied|not_tester|failed`. For example `/onboarding?step=3&instagram=connected`, or `/app/settings?instagram=error&reason=denied`. If `state` is missing or invalid it redirects to `/app/settings?instagram=error&reason=failed`.
 
 **F3. `DELETE /instagram`**: User. `204`. Removes the token; post history is kept (IG-10).
 
@@ -324,7 +324,9 @@ All require **Admin**. Every change is logged with the admin's id.
 
 ### J. System and internal (2)
 
-**J1. `GET /health`**: Public. `200` → `{"status": "ok", "db": "ok", "redis": "ok", "version": "1.0.3"}`; `503` if a dependency is down. Used by the load balancer.
+**J1. `GET /health`**: Public. `200` → `{"status": "ok", "db": "ok", "redis": "ok", "storage": "ok", "version": "0.1.0"}`. If a dependency is down: `503` with `"status": "degraded"` and that dependency as `"down"` (no error details are exposed). Used by the load balancer.
+
+Every response, including errors, carries an `X-Request-ID` header; the same id is on every log line for that request. A caller may send its own `X-Request-ID` (letters, digits, `.`, `_`, `-`, up to 64 characters); anything else is replaced.
 
 **J2. `POST /internal/renders/:id/callback`**: Internal (render service only). Header `X-Signature`: HMAC-SHA256 of the body with a shared secret. Body: `{"state": "succeeded"|"failed", "outputKey", "durationSeconds", "sizeBytes", "error"}`. `204`. Not exposed through the public load balancer.
 

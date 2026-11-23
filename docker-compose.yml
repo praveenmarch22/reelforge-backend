@@ -1,0 +1,107 @@
+# Local development stack: database, queue, file storage, API and worker.
+#
+#   docker compose up -d --build     start everything
+#   docker compose exec api pytest   run the tests
+#   docker compose down              stop (add -v to also delete local data)
+#
+# The passwords below are for local development only. Real environments get theirs
+# from a secrets store; see docs/TECHNICAL_DESIGN.md (Security, Deployment).
+
+x-api-env: &api-env
+  ENV: development
+  SECRET_KEY: ${SECRET_KEY:-dev-only-secret-change-me}
+  DATABASE_URL: postgresql+psycopg://reelforge:reelforge@postgres:5432/reelforge
+  TEST_DATABASE_URL: postgresql+psycopg://reelforge:reelforge@postgres:5432/reelforge_test
+  REDIS_URL: redis://redis:6379/0
+  S3_ENDPOINT_URL: http://minio:9000
+  S3_PUBLIC_ENDPOINT_URL: http://localhost:${MINIO_PORT:-9000}
+  S3_BUCKET: reelforge-media
+  S3_ACCESS_KEY: reelforge-dev
+  S3_SECRET_KEY: reelforge-dev-secret
+  WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: reelforge
+      POSTGRES_PASSWORD: reelforge
+      POSTGRES_DB: reelforge
+    ports:
+      - "${POSTGRES_PORT:-54320}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reelforge -d reelforge"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-63790}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    # MinIO no longer publishes its own images on Docker Hub or Quay, so this is Chainguard's
+    # build of MinIO, pinned by digest (RELEASE.2026-11-23). It has no shell, so there is no
+    # health check here; `flask storage-init` waits for it instead.
+    image: cgr.dev/chainguard/minio@sha256:bd92a45b821c0d85772c607ed7b49693efe78b3ffffae301b5d1b0981660de22
+    command: server /data --console-address ":9001"
+    user: "0:0" # local only: lets it write to the Docker volume
+    environment:
+      MINIO_ROOT_USER: reelforge-dev
+      MINIO_ROOT_PASSWORD: reelforge-dev-secret
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+
+  api:
+    build: ./api
+    environment: *api-env
+    # Development: apply migrations, make sure the bucket exists, then run with auto-reload.
+    command: >
+      sh -c "flask db upgrade && flask storage-init &&
+             flask run --host 0.0.0.0 --port 5000 --debug"
+    ports:
+      - "${API_PORT:-5000}:5000"
+    volumes:
+      - ./api:/app
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      minio: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/api/v1/health', timeout=3).status == 200 else 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  worker:
+    build: ./api
+    environment: *api-env
+    command: celery -A wsgi:celery_app worker --loglevel INFO --concurrency 2 -Q default,llm,voice,visuals,ai_video,render,publish,maintenance
+    volumes:
+      - ./api:/app
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      # Asks this worker to answer; fails if it crashed or can't reach the queue.
+      test: ["CMD-SHELL", "celery -A wsgi:celery_app inspect ping -d celery@$$HOSTNAME --timeout 5"]
+      interval: 15s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  postgres-data:
+  minio-data:

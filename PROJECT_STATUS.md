@@ -1,14 +1,14 @@
 # ReelForge: project status
 
-**Last updated:** 2026-11-18
+**Last updated:** 2026-11-23
 
 This is the single place to see where the project stands. It is updated at the end of every working session. The milestone definitions are in [MILESTONES.md](MILESTONES.md).
 
 ## Where we are
 
-**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. The backend has not been started; its approach is to be agreed.**
+**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. Onboarding (F4) is built and in QA. The backend has started, one task at a time: B1 (setup) is built and its tests pass.**
 
-Next up: **F4 Onboarding**, then **F5 New Reel and script editor**.
+Next up: finish F4 (fix the QA findings), then **B2 Accounts** on the backend and **F5 New Reel and script editor** on the frontend.
 
 ## Milestones
 
@@ -21,13 +21,14 @@ Next up: **F4 Onboarding**, then **F5 New Reel and script editor**.
 | F1 | Frontend setup and design system | Done | In the reelforge-frontend repository; type-check and production build pass |
 | F2 | Sign-in screens | Done | QA reviewed; covered by automated tests |
 | F3 | App shell, dashboard and projects | Done | QA reviewed; covered by automated tests. Seed data has 6 of the 11 statuses; the rest arrive with F5-F7 |
-| F4 | Onboarding | Not started | |
+| F4 | Onboarding | Built, in QA | QA verdict: pass with issues (1 major, 7 minor). Fixes and the Tester's run are in progress; not committed yet |
 | F5 | New Reel and script editor | Not started | |
 | F6 | Reel editor | Not started | Largest frontend milestone |
 | F7 | Render and publish | Not started | |
 | F8 | Settings, credits and admin | Not started | |
 | F9 | Frontend hardening | Not started | |
-| B1–B8 | Backend | Not started | Approach to be discussed after the frontend |
+| B1 | Backend setup | Built, review pending | Flask API, Postgres (16 tables from the baseline migration), Redis, Celery worker, MinIO, Docker Compose. 39 tests pass locally |
+| B2–B8 | Backend features | Not started | Built one task at a time, each agreed with the product owner first |
 | I1–I3 | Integration and launch | Not started | |
 
 ## What exists today
@@ -36,6 +37,7 @@ Next up: **F4 Onboarding**, then **F5 New Reel and script editor**.
 |---|---|---|
 | Documents | `docs/` | PRD, pipeline strategy, technical, API and database design, schema, Stitch prompts, UI review |
 | Pipeline prototype | `pipeline/` (Python), `renderer/` (Remotion) | Command-line: topic → rendered MP4 |
+| Backend API | `api/`, `docker-compose.yml` | Foundations only: health check, error format, logging, database migrations, background worker, file storage. No product features yet. How to run: [README.md](README.md) |
 | Web app | [reelforge-frontend](https://github.com/praveenmarch22/reelforge-frontend) | Login, sign up, verify email, forgot and reset password, dashboard, projects library |
 | UI designs | Stitch project (link in [STITCH_PROMPTS.md](docs/STITCH_PROMPTS.md)) | 22 screens |
 
@@ -113,6 +115,11 @@ Limits of this round: QA compared the designs from their text descriptions, not 
 | 2026-11-17 | Frontend stack: React 18, TypeScript, Vite 5, Tailwind 3, TanStack Query, React Hook Form + Zod, MSW for mocks (Tailwind 3 and Vite 5 because this machine has Node 18) |
 | 2026-11-17 | API additions found while building: `GET /projects` accepts a comma-separated `status` and returns `counts`; `ProjectSummary` has `progress` (recorded in API_DESIGN.md) |
 | 2026-11-17 | Folder layout: `reelforge/` with `frontend/` and `backend/` side by side |
+| 2026-11-23 | Backend is built one task at a time, with the product owner saying what is wanted from each task before it starts |
+| 2026-11-23 | Local backend stack runs in Docker Compose. MinIO's own images are no longer published, so Chainguard's build of MinIO is used, pinned by digest. Postgres and Redis use host ports 54320 and 63790 to avoid clashing with other projects |
+| 2026-11-23 | Backend dependencies: direct ones pinned in `requirements.txt`, every indirect one in `constraints.txt` (an unpinned queue library had crashed the worker) |
+| 2026-11-23 | The baseline migration runs an exact copy of `docs/schema.sql`; CI fails if the two differ. Schema changes go in new migrations |
+| 2026-11-23 | API design: `GET /instagram/connect` takes `returnTo`; health check reports storage; every response carries `X-Request-ID` |
 | 2026-11-18 | QA and Tester roles added; every milestone goes through both before it counts as done. Test tools: Vitest + Testing Library, Playwright; GitHub Actions runs them on every push to the frontend |
 | 2026-11-18 | API design clarified from QA's questions: verify-email signs the user in; resend-verification takes no body and returns `409 already_verified`; public endpoints ignore the CSRF header; the 11 statuses, sort order and empty-string rule are listed |
 | 2026-11-17 | Two public GitHub repositories under praveenmarch22: [reelforge-frontend](https://github.com/praveenmarch22/reelforge-frontend) (web app) and [reelforge-backend](https://github.com/praveenmarch22/reelforge-backend) (backend, all documents, milestones and this status document). Commits use GitHub's private no-reply email |
@@ -121,7 +128,7 @@ Limits of this round: QA compared the designs from their text descriptions, not 
 
 | # | Question | Needed by |
 |---|---|---|
-| 1 | Backend approach (your plan) | Before track B |
+| 1 | Backend: what you want from each task. B2 Accounts is next | Before each backend task |
 | 2 | Render capacity on AWS | B5 / I2 |
 | 3 | How the frontend gets the shared Remotion video components now that the renderer is in a separate repository (small package, or copy on release) | F6 |
 | 4 | In-app notifications (bell icon in the designs) are left out until render and publish exist | F7 |
@@ -145,3 +152,4 @@ Limits of this round: QA compared the designs from their text descriptions, not 
 | 2026-11-17 | UI review; 6 missing screens designed (22 total); milestones and this status document; frontend F1–F3 built and checked in the browser |
 | 2026-11-17 | Restructured into `frontend/` and `backend/`; split into two git repositories with the documents in the backend one; links and paths updated; frontend build, prototype build and renderer type-check re-run and pass; first commits pushed to GitHub |
 | 2026-11-18 | QA and Tester roles set up and run on F1–F3: QA report, 78 test cases, 300 automated tests; 3 major and most minor findings fixed; automatic test runs on GitHub added |
+| 2026-11-23 | Frontend F4 onboarding built and reviewed by QA (session restart interrupted the first review; it was rerun). Backend B1 built: Flask app, Docker Compose stack, baseline migration, storage, worker, 39 tests |

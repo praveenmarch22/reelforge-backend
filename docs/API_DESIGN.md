@@ -39,13 +39,13 @@ Of the 52 creator-facing endpoints, 49 are needed for version 1 (P0) and 3 are P
 | Format | JSON. Field names `camelCase` in JSON, `snake_case` in Python and the database |
 | IDs | UUIDs |
 | Times | ISO 8601 UTC, for example `2026-11-11T09:30:00Z` |
-| Auth | httpOnly cookies `rf_access` (15 min) and `rf_refresh` (30 days, path `/api/v1/auth`). Every POST, PATCH and DELETE sends `X-CSRF-Token` (value from the `rf_csrf` cookie). The server checks it only on endpoints that need a session; the Public endpoints (signup, login, refresh, verify-email, forgot-password, reset-password) ignore it, because no `rf_csrf` cookie exists before the first login. `rf_csrf` is readable by JavaScript and set for the parent domain, so the web app can read it when the API is on `api.<domain>` |
+| Auth | httpOnly cookies `rf_access` (holds a token valid for 15 min; the cookie itself is kept for 30 days so that an expired token is answered with `401 token_expired` rather than looking like no session) and `rf_refresh` (30 days, path `/api/v1/auth`). Every POST, PATCH and DELETE sends `X-CSRF-Token` (value from the `rf_csrf` cookie). The server checks it only on endpoints that need a session; the Public endpoints (signup, login, refresh, verify-email, forgot-password, reset-password) ignore it, because no `rf_csrf` cookie exists before the first login. `rf_csrf` is readable by JavaScript and set for the parent domain, so the web app can read it when the API is on `api.<domain>` |
 | Auth levels in this document | **Public**: no login. **User**: logged in. **Verified**: logged in and email verified. **Admin**: `is_admin`. **Internal**: private network with a shared secret |
 | Slow work | `202 Accepted` with job ids; the client polls `GET /jobs/:id` or `GET /projects/:id` every 2 s |
 | Pagination | `?limit=20&cursor=…` (max 100). Response: `{"items": [...], "nextCursor": "…" or null}` |
 | Idempotency | `Idempotency-Key` header accepted on endpoints marked **idempotent**. Same key + same body → the first response again; same key + different body → `409 idempotency_conflict`. Keys last 24 h |
 | Validation | Pydantic; unknown fields are rejected with `400 validation_error` |
-| Rate limits | `429 rate_limited` with `Retry-After` |
+| Rate limits | `429 rate_limited` with `Retry-After` (seconds) and the same number in `details.retryAfterSeconds` |
 | Ownership | Anything belonging to another user returns `404 not_found` (never `403`), so ids can't be probed |
 
 ### Error format
@@ -69,6 +69,7 @@ Of the 52 creator-facing endpoints, 49 are needed for version 1 (P0) and 3 are P
 | 403 | `forbidden` | Not an admin |
 | 403 | `csrf_failed` | Missing or wrong CSRF token |
 | 404 | `not_found` | Missing or not yours |
+| 405 | `method_not_allowed` | The address exists but not with this method; `Allow` header lists the ones that do |
 | 409 | `email_taken` | Sign-up with an existing email |
 | 409 | `already_verified` | Resend verification when the email is already verified |
 | 409 | `already_running` | Same job already active |
@@ -80,11 +81,14 @@ Of the 52 creator-facing endpoints, 49 are needed for version 1 (P0) and 3 are P
 | 409 | `instagram_reconnect_required` | Token expired or revoked |
 | 409 | `idempotency_conflict` | Key reused with a different body |
 | 410 | `token_invalid` | Verification or reset link expired or used |
-| 413 | `file_too_large` | |
-| 415 | `unsupported_file_type` | |
+| 413 | `file_too_large` | An upload over its size limit |
+| 413 | `payload_too_large` | A request body over 1 MB (uploads go straight to storage, never through the API) |
+| 415 | `unsupported_file_type` | An upload of a type that isn't accepted |
+| 415 | `unsupported_media_type` | A body that isn't JSON |
 | 422 | `content_refused` | A provider's safety filter refused the prompt |
 | 422 | `upload_invalid` | Uploaded file is corrupt, silent or too long |
 | 429 | `rate_limited` | |
+| 500 | `internal_error` | Something failed on the server. The details are in the server log under the response's `X-Request-ID`, never in the response |
 | 503 | `provider_unavailable` | Provider switched off or all fallbacks down |
 
 ### Shared objects
@@ -152,22 +156,22 @@ URLs to media are presigned and valid for 2 hours.
 ### A. Auth and account (12)
 
 **A1. `POST /auth/signup`**: Public. Create an account and send the verification email.
-- Body: `email` (valid email), `password` (8–128 characters, not a common password), `name` (1–80).
+- Body: `email` (a plain address such as `a@b.com`, sent without surrounding spaces; `Name <a@b.com>` is refused), `password` (8–128 characters, not a common password), `name` (1–80).
 - `201` → `{"user": User}` and session cookies (the user is logged in but unverified).
 - Errors: `400 validation_error`, `409 email_taken`, `429`.
 - Side effects: `credit_accounts` row with the allowance; verification token emailed (24 h).
 
-**A2. `POST /auth/verify-email`**: Public. Body: `token`. `200` → `{"user": User}` and session cookies (opening the link signs the user in on that browser, so it also works on a different device from the one used to sign up). Errors: `410 token_invalid`.
+**A2. `POST /auth/verify-email`**: Public. Body: `token`. `200` → `{"user": User}` and session cookies (opening the link signs the user in on that browser, so it also works on a different device from the one used to sign up). Errors: `410 token_invalid`, `403 account_disabled`.
 
 **A3. `POST /auth/resend-verification`**: User. No body (the email comes from the session; this replaces the `email` body mentioned in the technical design). `204`. Limited to 3 per hour. Errors: `409 already_verified`, `429 rate_limited`.
 
 **A4. `POST /auth/login`**: Public. Body: `email`, `password`. `200` → `{"user": User}` and cookies. Errors: `401 invalid_credentials` (same message for unknown email), `403 account_disabled`, `429` (5 per minute per IP and per email).
 
-**A5. `POST /auth/refresh`**: Refresh cookie. Rotates the refresh token. `200` → `{"user": User}`. Errors: `401 not_authenticated`. Reuse of an old refresh token revokes all sessions of that login.
+**A5. `POST /auth/refresh`**: Refresh cookie. Rotates the refresh token. `200` → `{"user": User}`. Errors: `401 not_authenticated`. Errors also include `403 account_disabled`. Reuse of an old refresh token while its replacement is in use revokes that login on every tab (the login, not the user's other devices). Two tabs of one browser may refresh at the same moment: for 10 seconds after a token is exchanged, presenting it again is answered with `401` without revoking anything and without clearing cookies.
 
 **A6. `POST /auth/logout`**: User. Revokes the refresh token and clears cookies. `204`.
 
-**A7. `POST /auth/forgot-password`**: Public. Body: `email`. Always `204`, whether or not the email exists. Sends a reset link (1 h).
+**A7. `POST /auth/forgot-password`**: Public. Body: `email`. `204` whether or not the email exists; the lookup and the sending happen in the background, so the response time is the same too. Sends a reset link (1 h). Errors: `400 validation_error`, `429 rate_limited` (counted per address typed, existing or not, so it reveals nothing).
 
 **A8. `POST /auth/reset-password`**: Public. Body: `token`, `password`. `204`; all sessions are revoked. Errors: `410 token_invalid`, `400`.
 
@@ -175,7 +179,7 @@ URLs to media are presigned and valid for 2 hours.
 
 **A10. `PATCH /me`**: User. Body (all optional): `name`, `niche`, `defaults.voiceId`, `defaults.captionStyle`, `defaults.mode`, `onboardingCompleted` (true only). `200` → `{"user": User}`. `niche` is one text value of up to 120 characters holding at most three topics separated by commas, with no repeats (for example `Fitness, Finance, gardening`); an empty string clears it. The web app builds it from up to three choices: listed topics, plus at most one free-text topic of up to 40 characters (counted in Unicode code points, the unit the server counts in; the web app never cuts through the middle of an emoji) that cannot itself contain a comma. The server rejects more than three comma-separated topics with `400 validation_error`.
 
-**A11. `POST /me/password`**: User. Body: `currentPassword`, `newPassword`. `204`; other sessions revoked. Errors: `401 invalid_credentials`, `400`.
+**A11. `POST /me/password`**: User. Body: `currentPassword`, `newPassword`. `204`; other sessions revoked. Errors: `401 invalid_credentials` (the current password is wrong; the session is still valid, so the web app must not treat this 401 as signed out), `400`, `429`.
 
 **A12. `DELETE /me`** (P1): User. Body: `password`. `204`. Soft-deletes the account, disconnects Instagram, cancels jobs; purged after 7 days.
 
@@ -357,7 +361,10 @@ Reachable only from the workers' private network; requests carry the shared secr
 |---|---|
 | A1 signup | 3 per hour per IP |
 | A4 login | 5 per minute per IP and per email |
-| A3, A7 emails | 3 per hour per user or email |
+| A3 resend verification | 3 per hour per user |
+| A7 forgot password | 3 per hour per email address typed, and 10 per hour per IP |
+| A2, A8 link tokens | 30 per hour per IP |
+| A11, A12 current-password checks | 5 per minute per user |
 | B1 ideas, B3/B8 scripts, C6 rewrite, F4 caption | 20 per hour per user combined |
 | C9 stock search | 60 per hour per user |
 | D1 uploads | 30 per hour per user |

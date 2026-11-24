@@ -34,6 +34,14 @@ jobs:
       - name: Tests
         run: docker compose exec -T api pytest
 
+      - name: The production image builds and its settings check works
+        run: |
+          docker build --build-arg REQUIREMENTS=requirements.txt -t reelforge-api:prod api
+          # With development settings the production app must refuse to start.
+          if docker run --rm -e ENV=production reelforge-api:prod python -c "import wsgi"; then
+            echo "production started with development secrets" && exit 1
+          fi
+
       - name: Logs on failure
         if: failure()
         run: docker compose logs --no-color --tail 200

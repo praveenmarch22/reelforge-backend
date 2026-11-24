@@ -9,9 +9,10 @@ from alembic import context
 # access to the values within the .ini file in use.
 config = context.config
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
-fileConfig(config.config_file_name)
+# The app has normally set logging up already (JSON lines). Applying alembic.ini on top
+# would switch the app's own loggers off, so it is only used when nothing is configured.
+if not logging.getLogger().handlers:
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 logger = logging.getLogger('alembic.env')
 
 

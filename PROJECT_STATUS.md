@@ -6,9 +6,9 @@ This is the single place to see where the project stands. It is updated at the e
 
 ## Where we are
 
-**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend has started, one task at a time: B1 (setup) is built and its tests pass.**
+**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend is built one task at a time: B1 (setup) and B2 (accounts) are done, both reviewed by QA and covered by automated tests.**
 
-Next up: the QA review of B1 and then **B2 Accounts** on the backend and **F5 New Reel and script editor** on the frontend.
+Next up: **B3 Projects and scenes** on the backend (to be agreed first) and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
 
 ## Milestones
 
@@ -27,8 +27,9 @@ Next up: the QA review of B1 and then **B2 Accounts** on the backend and **F5 Ne
 | F7 | Render and publish | Not started | |
 | F8 | Settings, credits and admin | Not started | |
 | F9 | Frontend hardening | Not started | |
-| B1 | Backend setup | Built, QA review pending | Flask API, Postgres (16 tables from the baseline migration), Redis, Celery worker, MinIO, Docker Compose. 39 tests pass locally and on GitHub. The QA review is waiting for Docker Desktop on the development machine, whose engine stopped responding on 2026-11-24 |
-| B2–B8 | Backend features | Not started | Built one task at a time, each agreed with the product owner first |
+| B1 | Backend setup | Done | Flask API, Postgres (16 tables from the baseline migration), Redis, Celery worker, MinIO, Docker Compose. QA reviewed; see "B1 and B2 result" below |
+| B2 | Accounts | Done | Sign-up with email verification, login, 30-day sessions, password reset, profile, change password, delete account (API A1-A12). QA reviewed; two rules await a decision (open questions 8 and 9) |
+| B3–B8 | Backend features | Not started | Built one task at a time, each agreed with the product owner first |
 | I1–I3 | Integration and launch | Not started | |
 
 ## What exists today
@@ -37,7 +38,7 @@ Next up: the QA review of B1 and then **B2 Accounts** on the backend and **F5 Ne
 |---|---|---|
 | Documents | `docs/` | PRD, pipeline strategy, technical, API and database design, schema, Stitch prompts, UI review |
 | Pipeline prototype | `pipeline/` (Python), `renderer/` (Remotion) | Command-line: topic → rendered MP4 |
-| Backend API | `api/`, `docker-compose.yml` | Foundations only: health check, error format, logging, database migrations, background worker, file storage. No product features yet. How to run: [README.md](README.md) |
+| Backend API | `api/`, `docker-compose.yml` | Foundations (health check, error format, logging, migrations, background worker, file storage) and accounts (the 12 auth and profile endpoints, emails to a local test inbox). How to run: [README.md](README.md) |
 | Web app | [reelforge-frontend](https://github.com/praveenmarch22/reelforge-frontend) | Login, sign up, verify email, forgot and reset password, onboarding, dashboard, projects library |
 | UI designs | Stitch project (link in [STITCH_PROMPTS.md](docs/STITCH_PROMPTS.md)) | 22 screens |
 
@@ -116,6 +117,20 @@ Deferred to F9: the whole voice card selecting the voice; returning to a deep li
 
 Limits of this round: only Chromium; the browser's back/forward cache could not be tested with the dev server; two browser tests are sensitive to a very slow machine (they passed when rerun).
 
+### B1 and B2 result (2026-11-24)
+
+| | B1 Backend setup | B2 Accounts |
+|---|---|---|
+| QA verdict | Pass with issues: 0 blockers, 1 major, 10 minor, 4 polish. [QA_REPORT_B1.md](docs/qa/QA_REPORT_B1.md) | Pass with issues: 0 blockers, 2 major, 7 minor, 4 polish. [QA_REPORT_B2.md](docs/qa/QA_REPORT_B2.md) |
+| Bugs from the Tester | Covered by the B2 rounds | 12 over three rounds (BUG-021 to BUG-032), five of them found while checking earlier fixes |
+| After fixes | The major and 7 others fixed or partly fixed; the rest scheduled. [FIX_LOG_B1.md](docs/qa/FIX_LOG_B1.md) | Both majors and all bugs fixed; 2 findings await a decision, 1 deferred to deployment. [FIX_LOG_B2.md](docs/qa/FIX_LOG_B2.md) |
+
+Automated tests for the backend: 492, all passing locally. They run inside Docker against real Postgres, Redis, MinIO and a small test mail server.
+
+Deferred from these reviews: upload limits and a migration guard (B3); proxy, cookie-domain and health-check choices (I2); type checking and a dependency audit in CI (I1). Web app changes needed when it is connected to the real API are listed in FIX_LOG_B2.
+
+Limits of this round: QA did not run a successful sign-up through the API (the sign-up limit was used up; the Tester's tests cover it); behaviour with Redis or the queue really down was reasoned about, not tested; nothing has run on AWS.
+
 ## Decisions log
 
 | Date | Decision |
@@ -134,6 +149,7 @@ Limits of this round: only Chromium; the browser's back/forward cache could not 
 | 2026-11-23 | Backend dependencies: direct ones pinned in `requirements.txt`, every indirect one in `constraints.txt` (an unpinned queue library had crashed the worker) |
 | 2026-11-23 | The baseline migration runs an exact copy of `docs/schema.sql`; CI fails if the two differ. Schema changes go in new migrations |
 | 2026-11-23 | API design: `GET /instagram/connect` takes `returnTo`; health check reports storage; every response carries `X-Request-ID` |
+| 2026-11-24 | Accounts: sessions are built directly on PyJWT (not Flask-JWT-Extended); emails go to a local test inbox (Mailpit) in development; forgot-password does its work in a background task so its timing reveals nothing; the local stack listens on this machine only |
 | 2026-11-24 | Onboarding: no language choice (English only); the free-text topic is one topic of up to 40 characters; unverified users cannot open onboarding; an Instagram connection completes only for the signed-in user who started it |
 | 2026-11-18 | QA and Tester roles added; every milestone goes through both before it counts as done. Test tools: Vitest + Testing Library, Playwright; GitHub Actions runs them on every push to the frontend |
 | 2026-11-18 | API design clarified from QA's questions: verify-email signs the user in; resend-verification takes no body and returns `409 already_verified`; public endpoints ignore the CSRF header; the 11 statuses, sort order and empty-string rule are listed |
@@ -150,6 +166,9 @@ Limits of this round: only Chromium; the browser's back/forward cache could not 
 | 5 | Landing page at `/` (PRD flow 1 step 1): it is in no milestone. Build one, or keep sending visitors straight to login? | Before launch |
 | 6 | Unverified users can browse the app with a "verify your email" banner (creating is blocked). Keep that, or lock them to the verify screen? | F5 |
 | 7 | Maximum project title length (proposed: 120 characters) | F5 |
+| 8 | The emailed verification link signs in whoever opens it, replacing anyone already signed in on that browser. Keep, or sign in only when nobody is signed in? | I1 |
+| 9 | A deleted account's email stays blocked for 7 days. Free it at once, or keep the 7 days (and is "undo delete" a feature)? | I1 |
+| 10 | Load balancer health check: the full one or a lighter one? Does staging run with production settings? | I2 |
 
 ## Known gaps and differences from the designs
 
@@ -169,3 +188,4 @@ Limits of this round: only Chromium; the browser's back/forward cache could not 
 | 2026-11-18 | QA and Tester roles set up and run on F1–F3: QA report, 78 test cases, 300 automated tests; 3 major and most minor findings fixed; automatic test runs on GitHub added |
 | 2026-11-23 | Frontend F4 onboarding built and reviewed by QA (session restart interrupted the first review; it was rerun). Backend B1 built: Flask app, Docker Compose stack, baseline migration, storage, worker, 39 tests |
 | 2026-11-24 | F4 onboarding: QA and Tester findings fixed over three rounds, API design and PRD updated, committed. Backend work paused: Docker Desktop's engine stopped responding |
+| 2026-11-24 | Docker Desktop restarted. Backend B1 reviewed by QA and its findings fixed. Backend B2 Accounts built from the design docs, tested (492 backend tests) and reviewed by QA; fixes over three rounds; API design updated |

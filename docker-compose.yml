@@ -19,6 +19,11 @@ x-api-env: &api-env
   S3_ACCESS_KEY: reelforge-dev
   S3_SECRET_KEY: reelforge-dev-secret
   WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
+  # Emails go to the local test inbox (Mailpit): http://localhost:8025
+  EMAIL_PROVIDER: smtp
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
+  RATE_LIMITS_ENABLED: ${RATE_LIMITS_ENABLED:-true}
 
 services:
   postgres:
@@ -28,7 +33,7 @@ services:
       POSTGRES_PASSWORD: reelforge
       POSTGRES_DB: reelforge
     ports:
-      - "${POSTGRES_PORT:-54320}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-54320}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -41,7 +46,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "${REDIS_PORT:-63790}:6379"
+      - "127.0.0.1:${REDIS_PORT:-63790}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 3s
@@ -59,26 +64,37 @@ services:
       MINIO_ROOT_USER: reelforge-dev
       MINIO_ROOT_PASSWORD: reelforge-dev-secret
     ports:
-      - "${MINIO_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio-data:/data
+
+  mailpit:
+    # A test inbox: it accepts every email the API sends and shows it in a web page.
+    # Nothing is delivered to real addresses.
+    image: axllent/mailpit:v1.21
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+    environment:
+      MP_MAX_MESSAGES: "500"
 
   api:
     build: ./api
     environment: *api-env
     # Development: apply migrations, make sure the bucket exists, then run with auto-reload.
+    # The in-browser debugger is off: it lets anyone who can reach the port run code.
     command: >
       sh -c "flask db upgrade && flask storage-init &&
-             flask run --host 0.0.0.0 --port 5000 --debug"
+             flask run --host 0.0.0.0 --port 5000 --debug --no-debugger"
     ports:
-      - "${API_PORT:-5000}:5000"
+      - "127.0.0.1:${API_PORT:-5000}:5000"
     volumes:
       - ./api:/app
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
       minio: {condition: service_started}
+      mailpit: {condition: service_started}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/api/v1/health', timeout=3).status == 200 else 1)"]
       interval: 5s
@@ -89,7 +105,9 @@ services:
   worker:
     build: ./api
     environment: *api-env
-    command: celery -A wsgi:celery_app worker --loglevel INFO --concurrency 2 -Q default,llm,voice,visuals,ai_video,render,publish,maintenance
+    # -B also runs the scheduler for the daily housekeeping tasks. In real environments the
+    # scheduler is its own single process, so two workers never both schedule the same task.
+    command: celery -A wsgi:celery_app worker -B -s /tmp/celerybeat-schedule --loglevel INFO --concurrency 2 -Q default,llm,voice,visuals,ai_video,render,publish,maintenance
     volumes:
       - ./api:/app
     depends_on:

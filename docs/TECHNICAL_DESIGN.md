@@ -190,13 +190,13 @@ sequenceDiagram
 | API | Python 3.12, Flask 3, Gunicorn | The user's chosen backend |
 | ORM and migrations | SQLAlchemy 2.0, Alembic (Flask-Migrate) | Standard for Flask |
 | Request validation | Pydantic 2 | Already used by the prototype's models |
-| Auth | Flask-JWT-Extended, JWTs in httpOnly cookies, argon2 password hashing | No tokens in JavaScript; refresh tokens rotate |
+| Auth | JWTs (PyJWT) in httpOnly cookies, argon2 password hashing | No tokens in JavaScript; refresh tokens rotate. Built directly on PyJWT instead of Flask-JWT-Extended, because the cookie layout in the API design (one `rf_csrf` cookie, refresh cookie limited to `/api/v1/auth`) is simpler to write than to configure |
 | Background jobs | Celery 5 + Redis | Retries, queues, scheduled tasks (beat) |
 | Database | PostgreSQL 16 | JSONB for the timeline, row locks for credits |
 | Rendering | Remotion 4 in a Node 20 service | Reuses the prototype renderer |
 | Storage | Amazon S3 in AWS; MinIO (S3-compatible) locally | Media; presigned URLs; the same code works with both |
 | AI services | See section 9.0 | Gemini, ElevenLabs, Groq Whisper, Pexels, Cloudflare FLUX, Hugging Face |
-| Email | Amazon SES (Resend in development) | Verification, password reset, notifications |
+| Email | Amazon SES in AWS; locally a test inbox (Mailpit) over SMTP | Verification, password reset, notifications. Nothing leaves the machine in development |
 | Errors | Sentry (free tier) | API, workers and frontend |
 | Tests | pytest, Vitest, Playwright (later) | Unit, component and end-to-end |
 | Local dev | Docker Compose | Postgres, Redis, API, worker, render service in one command |

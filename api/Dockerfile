@@ -23,4 +23,5 @@ RUN useradd --create-home --uid 1000 app && chown -R app:app /app
 USER app
 
 EXPOSE 5000
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--access-logfile", "-", "wsgi:app"]
+# No Gunicorn access log: the API writes its own JSON line per request, with the request id.
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "wsgi:app"]

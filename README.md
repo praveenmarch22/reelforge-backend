@@ -9,8 +9,8 @@ This repository holds the backend and all project documents. The web app is in [
 ## What is here
 
 ```
-├── api/                 Flask API and Celery worker (milestone B1 done: foundations only, no features yet)
-├── docker-compose.yml   local stack: Postgres, Redis, MinIO, API, worker
+├── api/                 Flask API and Celery worker (B1 foundations, B2 accounts)
+├── docker-compose.yml   local stack: Postgres, Redis, MinIO, Mailpit, API, worker
 ├── pipeline/            Python generation prototype: topic → script → voiceover → visuals → timeline
 ├── renderer/            Remotion prototype: timeline → vertical MP4
 ├── docs/                PRD, design documents, database schema, QA documents
@@ -32,6 +32,7 @@ The first start takes a few minutes. It creates the database from the migrations
 | What | Address |
 |---|---|
 | API | http://localhost:5000/api/v1 (try `/api/v1/health`) |
+| Test inbox (every email the API sends) | http://localhost:8025 |
 | MinIO console (file storage) | http://localhost:9001, user `reelforge-dev`, password `reelforge-dev-secret` (local only) |
 | Postgres | `localhost:54320`, database, user and password all `reelforge` (local only) |
 | Redis | `localhost:63790` |
@@ -42,7 +43,7 @@ Postgres and Redis use unusual ports on your machine so they don't clash with ot
 docker compose exec api pytest
 ```
 
-runs the tests (in their own database and bucket, never touching development data).
+runs the tests. They use their own database, storage bucket and Redis database, so development data is not touched. One thing is shared: the background worker, which a few tests ask to run a harmless "ping" task.
 
 ```bash
 docker compose logs -f api worker
@@ -71,13 +72,27 @@ api/
 │   ├── celery_app.py        Celery wired to the app; the queue names
 │   ├── storage.py           S3 / MinIO: presigned upload and download links
 │   ├── cli.py               `flask storage-init`, `flask worker-ping`
-│   ├── routes/              HTTP endpoints (so far: health)
-│   └── tasks/               background tasks (so far: ping)
+│   ├── models.py            database tables as Python classes
+│   ├── schemas.py           request bodies (validation) and the User object
+│   ├── security.py          password hashing, link tokens, common-password list
+│   ├── sessions.py          login sessions: the three cookies, refresh rotation, revoking
+│   ├── auth.py              @require_user: who is calling, CSRF check
+│   ├── ratelimit.py         rate limits in Redis
+│   ├── mail.py              the emails and how they are sent
+│   ├── accounts.py          creating users, link tokens, deleting accounts
+│   ├── routes/              HTTP endpoints: health, auth (A1-A8), me (A9-A12)
+│   └── tasks/               background tasks: ping, sending email, daily clean-up
 ├── migrations/              database migrations; 0001 is the schema in docs/schema.sql
 └── tests/
 ```
 
 Conventions come from [docs/API_DESIGN.md](docs/API_DESIGN.md) (error format, status codes) and [docs/TECHNICAL_DESIGN.md](docs/TECHNICAL_DESIGN.md) (queues, storage, security).
+
+### Accounts
+
+Sign-up, email verification, login, password reset and the profile follow [docs/API_DESIGN.md](docs/API_DESIGN.md) group A. To try them by hand, run the web app against this API or call the endpoints directly; verification and reset emails arrive in the test inbox at http://localhost:8025.
+
+The rate limits from the API design are on locally too (for example 3 sign-ups per hour from one address). To switch them off while experimenting, put `RATE_LIMITS_ENABLED=false` in `.env` and run `docker compose up -d`.
 
 ### Database changes
 

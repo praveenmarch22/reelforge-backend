@@ -33,7 +33,7 @@ class Storage:
                 s3={"addressing_style": "path"},
                 connect_timeout=3,
                 read_timeout=10,
-                retries={"max_attempts": 2},
+                retries={"total_max_attempts": 2},
             ),
         )
 

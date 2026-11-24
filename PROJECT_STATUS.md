@@ -1,14 +1,14 @@
 # ReelForge: project status
 
-**Last updated:** 2026-11-23
+**Last updated:** 2026-11-24
 
 This is the single place to see where the project stands. It is updated at the end of every working session. The milestone definitions are in [MILESTONES.md](MILESTONES.md).
 
 ## Where we are
 
-**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. Onboarding (F4) is built and in QA. The backend has started, one task at a time: B1 (setup) is built and its tests pass.**
+**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend has started, one task at a time: B1 (setup) is built and its tests pass.**
 
-Next up: finish F4 (fix the QA findings), then **B2 Accounts** on the backend and **F5 New Reel and script editor** on the frontend.
+Next up: the QA review of B1 and then **B2 Accounts** on the backend and **F5 New Reel and script editor** on the frontend.
 
 ## Milestones
 
@@ -21,13 +21,13 @@ Next up: finish F4 (fix the QA findings), then **B2 Accounts** on the backend an
 | F1 | Frontend setup and design system | Done | In the reelforge-frontend repository; type-check and production build pass |
 | F2 | Sign-in screens | Done | QA reviewed; covered by automated tests |
 | F3 | App shell, dashboard and projects | Done | QA reviewed; covered by automated tests. Seed data has 6 of the 11 statuses; the rest arrive with F5-F7 |
-| F4 | Onboarding | Built, in QA | QA verdict: pass with issues (1 major, 7 minor). Fixes and the Tester's run are in progress; not committed yet |
+| F4 | Onboarding | Done | QA reviewed; covered by automated tests. See "F4 result" below |
 | F5 | New Reel and script editor | Not started | |
 | F6 | Reel editor | Not started | Largest frontend milestone |
 | F7 | Render and publish | Not started | |
 | F8 | Settings, credits and admin | Not started | |
 | F9 | Frontend hardening | Not started | |
-| B1 | Backend setup | Built, review pending | Flask API, Postgres (16 tables from the baseline migration), Redis, Celery worker, MinIO, Docker Compose. 39 tests pass locally |
+| B1 | Backend setup | Built, QA review pending | Flask API, Postgres (16 tables from the baseline migration), Redis, Celery worker, MinIO, Docker Compose. 39 tests pass locally and on GitHub. The QA review is waiting for Docker Desktop on the development machine, whose engine stopped responding on 2026-11-24 |
 | B2–B8 | Backend features | Not started | Built one task at a time, each agreed with the product owner first |
 | I1–I3 | Integration and launch | Not started | |
 
@@ -38,7 +38,7 @@ Next up: finish F4 (fix the QA findings), then **B2 Accounts** on the backend an
 | Documents | `docs/` | PRD, pipeline strategy, technical, API and database design, schema, Stitch prompts, UI review |
 | Pipeline prototype | `pipeline/` (Python), `renderer/` (Remotion) | Command-line: topic → rendered MP4 |
 | Backend API | `api/`, `docker-compose.yml` | Foundations only: health check, error format, logging, database migrations, background worker, file storage. No product features yet. How to run: [README.md](README.md) |
-| Web app | [reelforge-frontend](https://github.com/praveenmarch22/reelforge-frontend) | Login, sign up, verify email, forgot and reset password, dashboard, projects library |
+| Web app | [reelforge-frontend](https://github.com/praveenmarch22/reelforge-frontend) | Login, sign up, verify email, forgot and reset password, onboarding, dashboard, projects library |
 | UI designs | Stitch project (link in [STITCH_PROMPTS.md](docs/STITCH_PROMPTS.md)) | 22 screens |
 
 ### How to run the web app
@@ -102,6 +102,20 @@ Deferred, with their milestone: seed data for the other five statuses (F5–F7),
 
 Limits of this round: QA compared the designs from their text descriptions, not the images; only Chromium was used; and QA did not re-review the fixes (the Tester's rerun covers them).
 
+### F4 result (2026-11-24)
+
+| | |
+|---|---|
+| QA verdict | Pass with issues: 0 blockers, 1 major, 7 minor, 3 polish. See [QA_REPORT_F4.md](docs/qa/QA_REPORT_F4.md) |
+| Bugs from the Tester | 11 over three rounds (BUG-010 to BUG-020), five of them found while checking the first fixes |
+| After fixes | All fixed except two items deferred to F9. Details in [FIX_LOG_F4.md](docs/qa/FIX_LOG_F4.md) |
+| Automated tests | 424 unit and component tests and 223 browser tests, all passing locally |
+| Design changes that came out of it | The exact rule for the Instagram return address, the "same signed-in user" check on the Instagram callback, and the niche format are now written into the API design; the PRD no longer mentions a language choice |
+
+Deferred to F9: the whole voice card selecting the voice; returning to a deep link after onboarding. Open for F8: the Instagram profile picture field.
+
+Limits of this round: only Chromium; the browser's back/forward cache could not be tested with the dev server; two browser tests are sensitive to a very slow machine (they passed when rerun).
+
 ## Decisions log
 
 | Date | Decision |
@@ -120,6 +134,7 @@ Limits of this round: QA compared the designs from their text descriptions, not 
 | 2026-11-23 | Backend dependencies: direct ones pinned in `requirements.txt`, every indirect one in `constraints.txt` (an unpinned queue library had crashed the worker) |
 | 2026-11-23 | The baseline migration runs an exact copy of `docs/schema.sql`; CI fails if the two differ. Schema changes go in new migrations |
 | 2026-11-23 | API design: `GET /instagram/connect` takes `returnTo`; health check reports storage; every response carries `X-Request-ID` |
+| 2026-11-24 | Onboarding: no language choice (English only); the free-text topic is one topic of up to 40 characters; unverified users cannot open onboarding; an Instagram connection completes only for the signed-in user who started it |
 | 2026-11-18 | QA and Tester roles added; every milestone goes through both before it counts as done. Test tools: Vitest + Testing Library, Playwright; GitHub Actions runs them on every push to the frontend |
 | 2026-11-18 | API design clarified from QA's questions: verify-email signs the user in; resend-verification takes no body and returns `409 already_verified`; public endpoints ignore the CSRF header; the 11 statuses, sort order and empty-string rule are listed |
 | 2026-11-17 | Two public GitHub repositories under praveenmarch22: [reelforge-frontend](https://github.com/praveenmarch22/reelforge-frontend) (web app) and [reelforge-backend](https://github.com/praveenmarch22/reelforge-backend) (backend, all documents, milestones and this status document). Commits use GitHub's private no-reply email |
@@ -153,3 +168,4 @@ Limits of this round: QA compared the designs from their text descriptions, not 
 | 2026-11-17 | Restructured into `frontend/` and `backend/`; split into two git repositories with the documents in the backend one; links and paths updated; frontend build, prototype build and renderer type-check re-run and pass; first commits pushed to GitHub |
 | 2026-11-18 | QA and Tester roles set up and run on F1–F3: QA report, 78 test cases, 300 automated tests; 3 major and most minor findings fixed; automatic test runs on GitHub added |
 | 2026-11-23 | Frontend F4 onboarding built and reviewed by QA (session restart interrupted the first review; it was rerun). Backend B1 built: Flask app, Docker Compose stack, baseline migration, storage, worker, 39 tests |
+| 2026-11-24 | F4 onboarding: QA and Tester findings fixed over three rounds, API design and PRD updated, committed. Backend work paused: Docker Desktop's engine stopped responding |

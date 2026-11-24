@@ -78,7 +78,7 @@ Priority: **P0** = required for version 1, **P1** = in version 1 if time allows,
 | A1 | Sign up with email and password, with email verification | P0 |
 | A2 | Log in, log out, forgot and reset password | P0 |
 | A3 | Sign in with Google | P2 (not in version 1) |
-| A4 | Profile: name, niche, default language, default voice, default caption style, default mode | P0 |
+| A4 | Profile: name, niche, default voice, default caption style, default mode (no language setting: version 1 is English only) | P0 |
 | A5 | Delete account and all data | P1 |
 
 ### 5.2 Ideas and script
@@ -214,7 +214,7 @@ Monthly allowance: **100 credits**. During testing, accounts get a larger allowa
 2. Enters email and password. The system sends a verification email.
 3. Clicks the link. The account is active and gets 100 credits.
 4. Onboarding, 3 short steps (all skippable):
-   1. Pick a niche and language.
+   1. Pick a niche (up to three topics). Version 1 is English only, so there is no language choice.
    2. Pick a default voice (with previews).
    3. Connect Instagram, or **Skip for now**.
 5. Lands on the empty dashboard with a **Create your first Reel** button.

@@ -173,7 +173,7 @@ URLs to media are presigned and valid for 2 hours.
 
 **A9. `GET /me`**: User. `200` → `{"user": User}`. The web app calls this on load.
 
-**A10. `PATCH /me`**: User. Body (all optional): `name`, `niche`, `defaults.voiceId`, `defaults.captionStyle`, `defaults.mode`, `onboardingCompleted` (true only). `200` → `{"user": User}`. `niche` is one text value of up to 120 characters; the web app stores up to three topics in it, separated by commas (for example `Fitness, Finance, gardening`).
+**A10. `PATCH /me`**: User. Body (all optional): `name`, `niche`, `defaults.voiceId`, `defaults.captionStyle`, `defaults.mode`, `onboardingCompleted` (true only). `200` → `{"user": User}`. `niche` is one text value of up to 120 characters holding at most three topics separated by commas, with no repeats (for example `Fitness, Finance, gardening`); an empty string clears it. The web app builds it from up to three choices: listed topics, plus at most one free-text topic of up to 40 characters (counted in Unicode code points, the unit the server counts in; the web app never cuts through the middle of an emoji) that cannot itself contain a comma. The server rejects more than three comma-separated topics with `400 validation_error`.
 
 **A11. `POST /me/password`**: User. Body: `currentPassword`, `newPassword`. `204`; other sessions revoked. Errors: `401 invalid_credentials`, `400`.
 
@@ -271,11 +271,20 @@ URLs to media are presigned and valid for 2 hours.
 
 ### F. Instagram and posts (6)
 
-**F1. `GET /instagram/connect`**: Verified. Query: `returnTo` (optional; the app page to come back to, for example `/onboarding?step=3`; must be a path inside the web app starting with a single `/`, otherwise it is ignored; default `/app/settings`). `200` → `{"authorizeUrl": "https://www.instagram.com/oauth/authorize?…"}`. The web app redirects the browser there. Includes a signed `state` valid 10 minutes, which also carries `returnTo`. Errors: `403 email_not_verified`.
+**F1. `GET /instagram/connect`**: Verified. Query: `returnTo` (optional; the app page to come back to, for example `/onboarding?step=3`; default `/app/settings`). `200` → `{"authorizeUrl": "https://www.instagram.com/oauth/authorize?…"}`. The web app redirects the browser there. Includes a signed `state` that is valid for 10 minutes, can be used once, and carries the user and the sanitised `returnTo`. Errors: `403 email_not_verified`.
+
+**Rule for `returnTo`** (it ends up in a redirect, so it must never lead off the site). The value is replaced by the default unless all of these hold:
+- it is at most 300 characters;
+- it starts with `/` and does not start with `//`;
+- it contains no backslash and no control characters (tab, carriage return, line feed and the rest of U+0000–U+001F, U+007F), because browsers read `\` as `/` and skip those characters;
+- resolved against the web app's own origin, it stays on that origin;
+- the resolved path does not start with `//`. Resolving removes `/./` and `/../` segments (also when written as `%2e`), so `/.//evil.example` passes the checks above and then becomes `//evil.example`.
+
+The value that is stored and used is the resolved path and query, never the text as given. Any `#fragment` is dropped and any `instagram` or `reason` query parameters already in it are removed.
 
 **F2. `GET /instagram/callback`**: Public (called by Instagram's redirect). Query: `code`, `state`, or `error`.
-- Verifies `state`, exchanges the code for a long-lived token, checks the account type, stores the encrypted token.
-- Always redirects (`302`) to the web app, to the `returnTo` page from F1 with the result added to its query string: `instagram=connected`, or `instagram=error&reason=personal_account|denied|not_tester|failed`. For example `/onboarding?step=3&instagram=connected`, or `/app/settings?instagram=error&reason=denied`. If `state` is missing or invalid it redirects to `/app/settings?instagram=error&reason=failed`.
+- Verifies `state` (signature, not expired, not used before) and that the signed-in user is the user inside `state`; the session cookie is sent on this request because it is a top-level navigation. This stops one person's approval link from connecting another person's account. Then it exchanges the code for a long-lived token, checks the account type and stores the encrypted token.
+- Always redirects (`302`) to the web app, to the `returnTo` page from F1 with the result added to its query string: `instagram=connected`, or `instagram=error&reason=personal_account|denied|not_tester|failed`. For example `/onboarding?step=3&instagram=connected`, or `/app/settings?instagram=error&reason=denied`. The parameters are set with URL handling, never by joining strings. If `state` is missing, invalid, expired, already used, or belongs to a different user than the one signed in, it redirects to `/app/settings?instagram=error&reason=failed`. The web app treats any `reason` it does not know as `failed`.
 
 **F3. `DELETE /instagram`**: User. `204`. Removes the token; post history is kept (IG-10).
 

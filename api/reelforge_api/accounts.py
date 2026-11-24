@@ -96,8 +96,14 @@ def set_password(user: User, password: str) -> None:
 
 
 def soft_delete(user: User) -> None:
-    """API A12: the account stops working now and is purged after 7 days. Caller commits."""
+    """API A12: the account stops working now and is purged after 7 days. Caller commits.
+
+    The email address is released at once, so the person can sign up again with it straight
+    away. The row keeps a placeholder address (unique, and never a deliverable one) until
+    the purge removes it.
+    """
     user.deleted_at = now()
+    user.email = f"deleted-{user.id}@deleted.invalid"
     revoke_all_sessions(user.id)
     db.session.execute(
         update(AuthToken)

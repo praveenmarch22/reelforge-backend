@@ -30,7 +30,7 @@
 4. **Allowed values are `text` + `CHECK`**, not Postgres enums, because adding a value is a simple migration.
 5. **Times are `timestamptz`** in UTC.
 6. **JSONB only for data that is read and written as a whole**: the timeline, project settings, caption word timings, job input/output, asset metadata. Anything that is filtered or joined on has its own column.
-7. **Soft delete** (`deleted_at`) for users and projects, then a scheduled purge, so accidental deletes can be undone for 7 days.
+7. **Soft delete** (`deleted_at`) for users and projects, then a scheduled purge after 7 days. Deleted projects can be restored within that time. A deleted account cannot: its email is replaced at once by a placeholder (`deleted-<id>@deleted.invalid`) so the address is free for a new sign-up.
 8. **`updated_at` is maintained by a trigger**, not by application code.
 
 ## 2. Entity relationship diagram
@@ -83,7 +83,7 @@ The creator's account and defaults.
 | is_tester | boolean | default false | Larger monthly credit allowance |
 | disabled_at | timestamptz | | Admin can block an account |
 | last_login_at | timestamptz | | |
-| deleted_at | timestamptz | | Soft delete; purged after 7 days |
+| deleted_at | timestamptz | | Soft delete; purged after 7 days. The email is replaced by a placeholder when this is set |
 
 ### 3.2 auth_tokens
 

@@ -9,7 +9,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from .support import (
-    ACCESS,
     NEW_PASSWORD,
     PASSWORD,
     Browser,
@@ -391,17 +390,8 @@ def test_a_deleted_account_cannot_be_verified(app, outbox):
     assert_sets_no_session_cookies(res)
 
 
-def test_verifying_on_a_browser_logged_in_as_someone_else_switches_accounts_cleanly(app, outbox):
-    """No mixing of sessions: afterwards the browser is the verified user and nobody else."""
-    newcomer = sign_up(app, verified=False)
-    other = sign_up(app)
-    old_access = other.browser.cookie(ACCESS)
-
-    res = other.browser.post("/auth/verify-email", {"token": last_token(app, newcomer.email, "verify")})
-
-    assert res.status_code == 200
-    assert other.browser.get("/me").get_json()["user"]["email"] == newcomer.email
-    assert other.browser.cookie(ACCESS) != old_access
+# What the link does on a browser where somebody is already signed in is in
+# test_accounts_verify_link.py.
 
 
 # ---------------------------------------------------------------- A3 resend verification

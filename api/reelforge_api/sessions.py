@@ -249,6 +249,40 @@ def revoke_all_sessions(user_id: uuid.UUID, keep_family: uuid.UUID | str | None 
         _remember_revoked(families)
 
 
+def signed_in_user_id() -> uuid.UUID | None:
+    """Whose live login the request's cookies belong to, if any. Never raises.
+
+    "Live" means the login still has a refresh token that is neither revoked nor expired;
+    an access token that has merely passed its 15 minutes still counts.
+    """
+    for cookie, kind in ((REFRESH_COOKIE, "refresh"), (ACCESS_COOKIE, "access")):
+        token = request.cookies.get(cookie)
+        if not token:
+            continue
+        try:
+            claims = jwt.decode(
+                token, _settings().secret_key, algorithms=[_ALGORITHM], options={"verify_exp": False}
+            )
+            if claims.get("typ") != kind:
+                continue
+            family_id, user_id = uuid.UUID(str(claims.get("sid"))), uuid.UUID(str(claims.get("sub")))
+        except (jwt.InvalidTokenError, ValueError):
+            continue
+        live = db.session.execute(
+            select(RefreshToken.id)
+            .where(
+                RefreshToken.family_id == family_id,
+                RefreshToken.user_id == user_id,
+                RefreshToken.revoked_at.is_(None),
+                RefreshToken.expires_at > now(),
+            )
+            .limit(1)
+        ).first()
+        if live:
+            return user_id
+    return None
+
+
 def end_current_session() -> None:
     """Revokes whatever login the request's cookies belong to, if any. Never raises."""
     for cookie, kind in ((REFRESH_COOKIE, "refresh"), (ACCESS_COOKIE, "access")):

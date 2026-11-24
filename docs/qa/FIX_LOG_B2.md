@@ -21,8 +21,8 @@ Status values: **Fixed**, **Answered** (a document is updated), **Deferred** (wi
 |---|---|---|
 | QB2-003 / BUG-023 / BUG-024: a NUL character or half an emoji gave a server error | Fixed | Refused as a validation error in every text field, new passwords and the login email |
 | QB2-004: forgot-password answered faster for unknown emails | Fixed | The lookup and the sending moved to a background task; the request does the same work either way |
-| QB2-005: the verification link signs in whoever opens it and replaces the current session | **Open** | The code follows API A2 as written. Decision needed: keep, or sign in only when nobody else is signed in |
-| QB2-006: a deleted account's email is blocked for 7 days with a misleading message | **Open** | Decision needed: free the email at once, or keep the 7 days (and whether "undo delete" is a feature) |
+| QB2-005: the verification link signs in whoever opens it and replaces the current session | Fixed (decided 2026-11-24) | The link signs in only when nobody else is signed in on that browser. If another user is signed in, the address is verified and their session is left alone. A password reset also cancels unused verification links. API A2 rewritten. The web app's mock and verify page follow at I1 |
+| QB2-006: a deleted account's email is blocked for 7 days with a misleading message | Fixed (decided 2026-11-24) | The email is released at once: the deleted account keeps a placeholder address until the purge. A deleted account cannot be restored. API A12 and the database design updated |
 | QB2-007: database errors logged query values | Fixed | Query values are hidden in errors and logs |
 | QB2-008: proxy and cookie-domain settings are not checked in production | Deferred to I2 | Their right values depend on the AWS layout, so the check is added when that is decided |
 | QB2-009: the mail connection did not verify the server's certificate | Fixed | It is verified, and encryption is required in production |
@@ -48,6 +48,7 @@ Status values: **Fixed**, **Answered** (a document is updated), **Deferred** (wi
 | BUG-030: `Name <a@b.com>` was accepted as an email at sign-up but could not log in | Fixed | Only a plain address is accepted |
 | BUG-031: the API design promised `415` for a non-JSON body, the code answered `400` | Fixed | A body in another format is `415 unsupported_media_type`; no body, or JSON that isn't an object, is `400` |
 | BUG-032 (round 3): a web address ending in a line break was accepted and then nothing worked | Fixed | Refused at start-up like any other inexact address |
+| BUG-033 (round 4): with a disabled account signed in, opening someone's verification link returned the disabled account's details | Fixed | A disabled or deleted account's session counts as nobody signed in, so the link signs its own account in |
 | Running the migrations in the same process switched the app's logging off | Fixed | The migration setup leaves logging alone when the app has already configured it |
 
 ## Differences from the mock that the web app will notice
@@ -67,8 +68,8 @@ These are frontend changes, to be made when the web app is connected to this API
 | # | Question | Answer |
 |---|---|---|
 | 1 | What should happen when Redis is down? | Requests are let through without rate limits, and a logged-out access token keeps working for at most 15 minutes. Chosen so that a Redis fault does not stop every login; the health check reports it. Revisit at I2 with real monitoring |
-| 2 | Should the verification link keep signing in? | **Open** (QB2-005) |
-| 3 | Should a deleted account's email be free at once? | **Open** (QB2-006) |
+| 2 | Should the verification link keep signing in? | Only when nobody else is signed in on that browser (QB2-005) |
+| 3 | Should a deleted account's email be free at once? | Yes; and "undo delete" is not a feature for accounts (QB2-006) |
 | 4 | Purged "after" or "within" 7 days? | After: the daily task removes accounts deleted more than 7 days ago, so up to 8 days. The technical design is to be corrected with the next edit of that section |
 | 5 | Is there a staging environment? | Not yet; decided at I2 (same as B1 question 4) |
 | 6 | Should a login have an absolute lifetime? | Not in version 1: an active user stays signed in. Noted as a hardening option |

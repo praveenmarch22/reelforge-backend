@@ -430,19 +430,127 @@ def test_links_emailed_before_deletion_stop_working(app, outbox):
     assert_error(reset, 410, "token_invalid")
 
 
-def test_signing_up_again_during_the_seven_days_is_answered_cleanly(app, outbox):
-    """The address is still held by the soft-deleted row; whatever the answer, it isn't a crash
-    and it doesn't hand the old account to the newcomer."""
+# ---------------------------------------------------------------- A12: the address is free at once
+
+
+def placeholder_for(user_id: str) -> str:
+    """What a deleted account's row holds instead of the address (docs/API_DESIGN.md A12)."""
+    return f"deleted-{user_id}@deleted.invalid"
+
+
+def test_deleting_releases_the_address_and_leaves_a_placeholder_on_the_row(app, database, outbox):
     account = sign_up(app)
+    outbox.clear()
     assert account.browser.delete("/me", {"password": PASSWORD}).status_code == 204
 
-    res = Browser(app).post("/auth/signup", {"email": account.email, "password": NEW_PASSWORD, "name": "New"})
+    row = database.one("SELECT * FROM users")
+    assert row["email"] == placeholder_for(account.user["id"])
+    assert account.email not in " ".join(str(value) for value in row.values())
+    # Until somebody signs up with it again, the address behaves like one that never existed.
+    assert not can_log_in(app, account.email, PASSWORD)
+    assert Browser(app).post("/auth/forgot-password", {"email": account.email}).status_code == 204
+    assert outbox == []
+    assert database.value("SELECT count(*) FROM auth_tokens WHERE used_at IS NULL") == 0
+    # And the placeholder is not a way back in.
+    res = Browser(app).post("/auth/login", {"email": row["email"], "password": PASSWORD})
+    assert_error(res, 401, "invalid_credentials")
 
-    assert res.status_code in (201, 409), res.get_data(as_text=True)
-    if res.status_code == 409:
-        assert_error(res, 409, "email_taken")
-    else:
-        assert res.get_json()["user"]["id"] != account.user["id"]
+
+def test_signing_up_again_right_after_deleting_gives_a_brand_new_account(app, database, outbox):
+    old = sign_up(app)
+    changed = old.browser.patch("/me", {"name": "Old Name", "niche": "Fitness", "onboardingCompleted": True})
+    assert changed.status_code == 200
+    database.run("UPDATE credit_accounts SET balance = 7")
+    forgotten_tab = Browser(app).copy_session_from(old.browser)
+    assert old.browser.delete("/me", {"password": PASSWORD}).status_code == 204
+    outbox.clear()
+
+    browser = Browser(app)
+    res = browser.post("/auth/signup", {"email": old.email, "password": NEW_PASSWORD, "name": "Asha Again"})
+
+    assert res.status_code == 201, res.get_data(as_text=True)
+    new = res.get_json()["user"]
+    assert new["id"] != old.user["id"]
+    # Nothing comes over from the old account: profile, verification, onboarding, credits.
+    assert new == new_user_json(new["id"], old.email, "Asha Again")
+    ledger = database.rows("SELECT amount, kind FROM credit_ledger WHERE user_id = :id", id=new["id"])
+    assert ledger == [{"amount": 100, "kind": "grant"}]
+    assert [message.to for message in outbox] == [
+        old.email
+    ], "the new account gets its own verification email"
+    # The address now opens the new account only, with the new password only.
+    assert not can_log_in(app, old.email, PASSWORD)
+    logged_in = Browser(app).post("/auth/login", {"email": old.email, "password": NEW_PASSWORD})
+    assert logged_in.get_json()["user"]["id"] == new["id"]
+    assert me(browser)["id"] == new["id"]
+    # A browser still holding the old account's cookies gets nowhere.
+    assert_error(forgotten_tab.get("/me"), 401, "not_authenticated")
+    assert_error(forgotten_tab.post("/auth/refresh"), 401, "not_authenticated")
+    emails = {str(row["id"]): row["email"] for row in database.rows("SELECT id, email FROM users")}
+    assert emails == {old.user["id"]: placeholder_for(old.user["id"]), new["id"]: old.email}
+
+
+def test_forgot_password_after_signing_up_again_resets_only_the_new_account(app, database, outbox):
+    old = sign_up(app)
+    assert old.browser.delete("/me", {"password": PASSWORD}).status_code == 204
+    new = sign_up(app, email=old.email, password=NEW_PASSWORD)
+    outbox.clear()
+
+    assert Browser(app).post("/auth/forgot-password", {"email": old.email}).status_code == 204
+
+    assert [message.to for message in outbox] == [old.email]
+    owners = [
+        str(row["user_id"]) for row in database.rows("SELECT user_id FROM auth_tokens WHERE used_at IS NULL")
+    ]
+    assert owners == [new.user["id"]]
+    token = last_token(app, old.email, "reset")
+    res = Browser(app).post("/auth/reset-password", {"token": token, "password": "a-third-passphrase-here"})
+    assert res.status_code == 204
+    logged_in = Browser(app).post("/auth/login", {"email": old.email, "password": "a-third-passphrase-here"})
+    assert logged_in.get_json()["user"]["id"] == new.user["id"]
+    old_hash = database.value("SELECT password_hash FROM users WHERE id = :id", id=old.user["id"])
+    assert old_hash.startswith("$argon2id$"), "the deleted row is not touched by the reset"
+    assert database.value("SELECT deleted_at FROM users WHERE id = :id", id=old.user["id"]) is not None
+
+
+def test_the_purge_removes_the_old_row_and_leaves_the_account_that_took_its_address(app, database, outbox):
+    old = sign_up(app)
+    assert old.browser.delete("/me", {"password": PASSWORD}).status_code == 204
+    new = sign_up(app, email=old.email, password=NEW_PASSWORD)
+    assert run_task(app, purge_deleted) == 0, "nothing is purged before the 7 days are over"
+    database.run("UPDATE users SET deleted_at = now() - interval '8 days' WHERE deleted_at IS NOT NULL")
+
+    assert run_task(app, purge_deleted) == 1
+
+    assert [str(row["id"]) for row in database.rows("SELECT id FROM users")] == [new.user["id"]]
+    assert database.value("SELECT count(*) FROM credit_ledger WHERE user_id = :id", id=old.user["id"]) == 0
+    assert me(new.browser) == {**new.user, "email": old.email}
+    assert me(new.browser)["credits"]["balance"] == 100
+    assert can_log_in(app, old.email, NEW_PASSWORD)
+
+
+def test_one_address_can_be_deleted_and_signed_up_again_more_than_once(app, database, outbox):
+    first = sign_up(app)
+    assert first.browser.delete("/me", {"password": PASSWORD}).status_code == 204
+    second = sign_up(app, email=first.email)
+    assert second.browser.delete("/me", {"password": PASSWORD}).status_code == 204
+
+    third = sign_up(app, email=first.email)
+
+    assert len({first.user["id"], second.user["id"], third.user["id"]}) == 3
+    assert database.value("SELECT count(*) FROM users WHERE deleted_at IS NOT NULL") == 2
+    assert me(third.browser)["email"] == first.email
+
+
+def test_nobody_can_sign_up_with_a_placeholder_address(app, database, outbox):
+    account = sign_up(app)
+    body = {"email": placeholder_for(account.user["id"]), "password": NEW_PASSWORD, "name": "Squatter"}
+
+    assert_invalid(Browser(app).post("/auth/signup", body), "email")
+
+    # Deleting the real account still works afterwards.
+    assert account.browser.delete("/me", {"password": PASSWORD}).status_code == 204
+    assert database.value("SELECT count(*) FROM users") == 1
 
 
 # ---------------------------------------------------------------- purge and token clean-up

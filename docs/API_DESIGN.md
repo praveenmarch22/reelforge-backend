@@ -161,7 +161,12 @@ URLs to media are presigned and valid for 2 hours.
 - Errors: `400 validation_error`, `409 email_taken`, `429`.
 - Side effects: `credit_accounts` row with the allowance; verification token emailed (24 h).
 
-**A2. `POST /auth/verify-email`**: Public. Body: `token`. `200` → `{"user": User}` and session cookies (opening the link signs the user in on that browser, so it also works on a different device from the one used to sign up). Errors: `410 token_invalid`, `403 account_disabled`.
+**A2. `POST /auth/verify-email`**: Public. Body: `token`. Marks the address verified; the link works once. What else happens depends on who is signed in on that browser:
+- nobody: `200` → `{"user": User}` and session cookies, so the link also works on a different device from the one used to sign up;
+- the same user: `200` → `{"user": User}`; their session is kept as it is;
+- a different user: `200` → `{"user": User, "verifiedOtherAccount": true}`, where `user` is the person who is signed in. Their session is not touched and no cookies are set, so a link can never move someone into the sender's account.
+
+"Signed in" means the browser's login still has a usable refresh token; an access token that has only passed its 15 minutes counts. A session of a disabled or deleted account counts as nobody. Errors: `410 token_invalid`, `403 account_disabled`.
 
 **A3. `POST /auth/resend-verification`**: User. No body (the email comes from the session; this replaces the `email` body mentioned in the technical design). `204`. Limited to 3 per hour. Errors: `409 already_verified`, `429 rate_limited`.
 
@@ -181,7 +186,7 @@ URLs to media are presigned and valid for 2 hours.
 
 **A11. `POST /me/password`**: User. Body: `currentPassword`, `newPassword`. `204`; other sessions revoked. Errors: `401 invalid_credentials` (the current password is wrong; the session is still valid, so the web app must not treat this 401 as signed out), `400`, `429`.
 
-**A12. `DELETE /me`** (P1): User. Body: `password`. `204`. Soft-deletes the account, disconnects Instagram, cancels jobs; purged after 7 days.
+**A12. `DELETE /me`** (P1): User. Body: `password`. `204`. Soft-deletes the account, ends every session, disconnects Instagram, cancels jobs; purged after 7 days. The email address is released at once, so it can be used for a new sign-up straight away. A deleted account cannot be restored. Errors: `401 invalid_credentials` (wrong password; the session is still valid), `429`.
 
 ### B. Ideas and projects (12)
 

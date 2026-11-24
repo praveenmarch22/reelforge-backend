@@ -5,12 +5,14 @@ from __future__ import annotations
 import logging
 
 from flask import Blueprint, jsonify, make_response
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 
 from .. import accounts, mail, ratelimit
 from ..auth import current_session_id, current_user, require_user
 from ..errors import ApiError
 from ..extensions import db
+from ..models import AuthToken, User
 from ..schemas import (
     ForgotPasswordBody,
     LoginBody,
@@ -26,6 +28,7 @@ from ..sessions import (
     revoke_all_sessions,
     revoke_family,
     rotate_session,
+    signed_in_user_id,
     start_session,
 )
 
@@ -72,7 +75,11 @@ def signup():
 
 @bp.post("/verify-email")
 def verify_email():
-    """A2. Opening the emailed link verifies the address and signs this browser in."""
+    """A2. Opening the emailed link verifies the address.
+
+    It also signs the browser in, unless somebody else is signed in there: a link must not
+    be able to move a person into the account of whoever sent it to them.
+    """
     ratelimit.hit("token-ip", ratelimit.client_ip(), limit=30, seconds=HOUR)
     body = read_body(TokenBody)
     user = accounts.use_token(body.token, accounts.VERIFY_EMAIL)
@@ -84,8 +91,23 @@ def verify_email():
         raise ApiError(403, "account_disabled", "This account has been disabled. Contact support.")
     if user.email_verified_at is None:
         user.email_verified_at = accounts.now()
+
+    signed_in = signed_in_user_id()
+    if signed_in is not None and signed_in != user.id:
+        # Somebody else's browser: the address is verified, their session is left alone,
+        # and the answer describes them, not the account the link belongs to.
+        other = db.session.get(User, signed_in)
+        db.session.commit()
+        if other is not None and other.deleted_at is None and other.disabled_at is None:
+            return jsonify(user=user_json(other), verifiedOtherAccount=True)
+        # A deleted or disabled account's session is of no use to anyone (every other
+        # endpoint refuses it), so the browser counts as signed out and the link signs in.
+        signed_in = None
+
     response = make_response(jsonify(user=user_json(user)), 200)
-    start_session(response, user)
+    if signed_in is None:
+        start_session(response, user)
+    # Already signed in as this user: the session they have stays as it is.
     db.session.commit()
     return response
 
@@ -172,6 +194,13 @@ def reset_password():
         db.session.rollback()
         raise ApiError(410, "token_invalid", _TOKEN_INVALID)
     accounts.set_password(user, body.password)
+    # A reset is what someone does when the account may be in the wrong hands, so an
+    # unused verification link (which can sign a browser in) stops working too.
+    db.session.execute(
+        update(AuthToken)
+        .where(AuthToken.user_id == user.id, AuthToken.used_at.is_(None))
+        .values(used_at=accounts.now())
+    )
     revoke_all_sessions(user.id)
     db.session.commit()
     ratelimit.reset("login-email", user.email)

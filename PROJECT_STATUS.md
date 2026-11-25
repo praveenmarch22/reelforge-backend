@@ -6,9 +6,9 @@ This is the single place to see where the project stands. It is updated at the e
 
 ## Where we are
 
-**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend is built one task at a time: B1 (setup), B2 (accounts) and B3 (projects, scripts, scenes, jobs and credits) are done, each reviewed by QA and covered by automated tests (938 backend tests). Script writing runs on an offline stand-in until the Gemini and Groq keys are added.**
+**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend is built one task at a time: B1 (setup), B2 (accounts) and B3 (projects, scripts, scenes, jobs and credits) are done, each reviewed by QA and covered by automated tests (938 backend tests). Scripts are written by real AI models (Gemini, with Groq as backup).**
 
-Next up: the Gemini and Groq keys, then **B4 Generation** on the backend (to be agreed first) and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
+Next up: **B4 Generation** on the backend, in three slices (voice, then visuals, then music with Generate Reel and the preview timeline) and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
 
 ## Milestones
 
@@ -30,7 +30,8 @@ Next up: the Gemini and Groq keys, then **B4 Generation** on the backend (to be 
 | B1 | Backend setup | Done | Flask API, Postgres (16 tables from the baseline migration), Redis, Celery worker, MinIO, Docker Compose. QA reviewed; see "B1 and B2 result" below |
 | B2 | Accounts | Done | Sign-up with email verification, login, 30-day sessions, password reset, profile, change password, delete account (API A1-A12). QA reviewed; both rule decisions made |
 | B3 | Projects, scripts and jobs | Done | API B1–B10, C1–C6, G, H; language models (Gemini, Groq, offline mock); credits reserved, refunded and reset monthly. QA verdict was fail (a credit race); fixed and retested. See [FIX_LOG_B3.md](docs/qa/FIX_LOG_B3.md) |
-| B4–B8 | Backend features | Not started | Built one task at a time, each agreed with the product owner first |
+| B4 | Generation | Agreed, not started | Three slices: 1 voice (ElevenLabs, Edge TTS backup), 2 visuals (Pexels stock, Cloudflare FLUX images), 3 music, Generate Reel (B11) and timeline (B12). Tester and QA after each slice |
+| B5–B8 | Backend features | Not started | Built one task at a time, each agreed with the product owner first |
 | I1–I3 | Integration and launch | Not started | |
 
 ## What exists today
@@ -156,6 +157,11 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 | 2026-11-24 | Onboarding: no language choice (English only); the free-text topic is one topic of up to 40 characters; unverified users cannot open onboarding; an Instagram connection completes only for the signed-in user who started it |
 | 2026-11-18 | QA and Tester roles added; every milestone goes through both before it counts as done. Test tools: Vitest + Testing Library, Playwright; GitHub Actions runs them on every push to the frontend |
 | 2026-11-18 | API design clarified from QA's questions: verify-email signs the user in; resend-verification takes no body and returns `409 already_verified`; public endpoints ignore the CSRF header; the 11 statuses, sort order and empty-string rule are listed |
+| 2026-11-25 | Language models: `gemini-3.5-flash` first, Groq `openai/gpt-oss-120b` as backup (the earlier choices were retired; `gemini-3.8-flash` was refusing requests as busy). Keys live only in the gitignored backend `.env` |
+| 2026-11-25 | B4 is built in three slices, each tested and reviewed before the next: voice, visuals, then music + Generate Reel + timeline |
+| 2026-11-25 | Voice: ElevenLabs first (free plan about 10 minutes a month, non-commercial), Edge TTS takes over when it fails or runs out |
+| 2026-11-25 | Music: a starter library of about 10 free-license tracks, one or two per mood, picked by the developer and approved by the product owner before download; license kept with each track |
+| 2026-11-25 | Until B7, a Full AI scene gets a Cloudflare FLUX image with slow motion, charged as an AI image (1 credit) |
 | 2026-11-17 | Two public GitHub repositories under praveenmarch22: [reelforge-frontend](https://github.com/praveenmarch22/reelforge-frontend) (web app) and [reelforge-backend](https://github.com/praveenmarch22/reelforge-backend) (backend, all documents, milestones and this status document). Commits use GitHub's private no-reply email |
 
 ## Open questions
@@ -192,3 +198,4 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 | 2026-11-24 | Docker Desktop restarted. Backend B1 reviewed by QA and its findings fixed. Backend B2 Accounts built from the design docs, tested (492 backend tests) and reviewed by QA; fixes over three rounds; API design updated |
 | 2026-11-24 | Two account rules decided and built: the verification link signs in only when nobody else is signed in; deleting an account frees its email at once. 515 backend tests |
 | 2026-11-25 | Backend B3 built from the design docs: projects, scripts (written or pasted), scenes, background jobs, credits. QA found a credit race (blocker) and 13 more issues, the Tester 2 bugs; all fixed. 938 backend tests |
+| 2026-11-25 | Gemini and Groq keys added; a real script written end to end through the app. Model defaults updated. B4 planned with the product owner |

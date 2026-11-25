@@ -15,7 +15,7 @@ from pydantic import ValidationError
 
 from reelforge_api import voices
 from reelforge_api.config import Settings
-from reelforge_api.providers.base import ProviderError
+from reelforge_api.providers.base import USER_AGENT, ProviderError
 from reelforge_api.providers.voice import (
     EDGE_MOOD,
     ELEVEN_MOOD_SETTINGS,
@@ -205,7 +205,7 @@ def test_elevenlabs_is_asked_first_with_the_voice_mood_settings_and_word_timings
     (call,) = http.tts_calls()
     assert call["method"] == "POST"
     assert call["url"] == f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_IDS[3]}/with-timestamps"
-    assert call["headers"] == {"xi-api-key": ELEVEN_KEY}
+    assert call["headers"] == {"User-Agent": USER_AGENT, "xi-api-key": ELEVEN_KEY}
     assert call["params"] == {"output_format": "mp3_44100_128"}
     assert call["timeout"] and call["timeout"] <= 60
     stability, style = ELEVEN_MOOD_SETTINGS[mood]
@@ -540,7 +540,7 @@ def test_preview_clips_are_fetched_once_and_kept_for_a_day(eleven_app, outbox, h
     }
     (call,) = http.calls
     assert call["method"] == "GET" and call["url"] == VOICES_URL
-    assert call["headers"] == {"xi-api-key": ELEVEN_KEY}
+    assert call["headers"] == {"User-Agent": USER_AGENT, "xi-api-key": ELEVEN_KEY}
 
     again = creator(eleven_app).browser.get("/voices").get_json()["items"]
     assert again == first and len(http.calls) == 1, "served from the cache"
@@ -637,7 +637,7 @@ def test_these_tests_cannot_reach_a_real_voice_service():
     """The guard in voice_support: the repo's .env holds real keys with a small free quota."""
     import edge_tts
 
-    from .voice_support import RealServiceCalled
+    from .voice_support import NETWORK_ATTEMPTS, RealServiceCalled
 
     with pytest.raises(RealServiceCalled):
         requests.post(VOICES_URL, timeout=1)
@@ -645,6 +645,13 @@ def test_these_tests_cannot_reach_a_real_voice_service():
         requests.Session().get(VOICES_URL, timeout=1)
     with pytest.raises(RealServiceCalled):
         edge_tts.Communicate("hello", DEFAULT_VOICE.edge)
+    for url in ("https://pixabay.com/api/videos/", "https://api.cloudflare.com/client/v4/accounts/x"):
+        with pytest.raises(RealServiceCalled):
+            requests.get(url, timeout=1)
+    with pytest.raises(requests.ConnectionError):  # anything else: as if offline, and recorded
+        requests.get("https://example.com/a.jpg", timeout=1)
+    assert NETWORK_ATTEMPTS[-1] == ("GET", "https://example.com/a.jpg")
+    NETWORK_ATTEMPTS.clear()  # these attempts were the point of the test
 
 
 def test_the_tasks_soft_time_limit_stops_an_edge_voice_as_timed_out(keyless_app, outbox, http, edge):

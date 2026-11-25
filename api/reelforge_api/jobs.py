@@ -36,13 +36,13 @@ log = logging.getLogger(__name__)
 ACTIVE = ("queued", "running")
 QUEUES = {
     "ideas": "llm", "script": "llm", "rewrite_scene": "llm", "hooks": "llm", "caption": "llm",
-    "voice": "voice",
+    "voice": "voice", "visual": "visuals",
 }  # fmt: skip
 # A job running longer than this is treated as stuck and failed (task design rule 3).
-TIME_LIMITS = {"llm": timedelta(minutes=5), "voice": timedelta(minutes=7)}
+TIME_LIMITS = {"llm": timedelta(minutes=5), "voice": timedelta(minutes=7), "visuals": timedelta(minutes=7)}
 # Celery's (soft, hard) limits in seconds per queue. A voice job may try ElevenLabs three
 # times and then Edge three times, with waits for rate limits, before it gives up.
-TASK_LIMITS = {"llm": (240, 300), "voice": (360, 420)}
+TASK_LIMITS = {"llm": (240, 300), "voice": (360, 420), "visuals": (360, 420)}
 # A job still queued after this long means no worker is taking it.
 QUEUED_LIMIT = timedelta(minutes=30)
 
@@ -55,6 +55,8 @@ MESSAGES = {
     "provider_failed": "The AI service didn't answer properly. Please try again.",
     "scene_changed": "The scene was edited while it was being rewritten, so the rewrite was not applied.",
     "timed_out": "This took too long and was stopped. Please try again.",
+    "stock_unavailable": "That clip is no longer available. Pick another one.",
+    "no_stock_match": "No stock clip fits this scene. Try other search words, or switch it to an AI image.",
     "queue_unavailable": "We couldn't start this. Please try again in a moment.",
     "internal_error": "Something went wrong on our side. Please try again.",
 }

@@ -1,14 +1,14 @@
-"""Scenes (API design group C: C1 to C6).
+"""Scenes (API design group C: C1 to C10).
 
-C7 (a scene's voice) is milestone B4 slice 1; C8 to C10 (visuals) come in slice 2.
+C7 (a scene's voice) is milestone B4 slice 1; C8 to C10 (visuals) are slice 2.
 """
 
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, make_response
+from flask import Blueprint, jsonify, make_response, request
 from sqlalchemy import select
 
-from .. import generation, jobs, projects
+from .. import generation, jobs, projects, ratelimit, visuals
 from ..auth import current_user, require_user
 from ..errors import ApiError
 from ..extensions import db
@@ -18,7 +18,9 @@ from ..project_schemas import (
     CreateSceneBody,
     ReorderBody,
     RewriteBody,
+    SelectVisualBody,
     UpdateSceneBody,
+    VisualRegenerateBody,
     VoiceRegenerateBody,
     present,
 )
@@ -96,6 +98,11 @@ def update_scene(scene_id: str):
     if voice_busy and any(f in sent and sent[f] != getattr(scene, f) for f in ("narration", "mood")):
         # The voice being made is for the old text: stop it now and refund it (QB4-005).
         jobs.cancel_active(scene_ids=[scene.id], job_type="voice")
+    if scene.visual_status in ("queued", "running") and any(
+        f in sent and sent[f] != getattr(scene, f) for f in visuals.VISUAL_FIELDS
+    ):
+        # Likewise a visual being made for the old prompt, query or source.
+        jobs.cancel_active(scene_ids=[scene.id], job_type="visual")
 
     for field, outdates in (
         ("narration", projects.mark_voice_outdated),
@@ -232,6 +239,96 @@ def regenerate_voice(scene_id: str):
     if scene.words_edited and not body.confirm_replace_words:
         raise ApiError(409, "words_edited", generation.WORDS_EDITED)
     job = generation.start_voice_job(project, scene, body.voice_id or "")
+    db.session.commit()
+    answer = jsonify(job=jobs.job_json(job, False))
+    jobs.dispatch([job])
+    return answer, 202
+
+
+def _bad_query(field: str, message: str) -> ApiError:
+    return ApiError(400, "validation_error", "Some details need another look.", {"fields": {field: message}})
+
+
+@bp.post("/scenes/<scene_id>/visual/regenerate")
+@require_user(verified=True)
+@idempotent
+def regenerate_visual(scene_id: str):
+    """C8. A new visual for this scene: the next stock clip, or a new AI image. Changes to
+    the source, prompt or stock query sent here are saved first. 0 credits for stock, 1 for an
+    AI image (and, until B7, for an AI video scene, which gets an AI image with motion)."""
+    body = read_body(VisualRegenerateBody, allow_empty=True)
+    scene, project = projects.get_scene(current_user().id, scene_id, lock=True)
+    refuse_while_scripting(project)
+    sent = present(body)
+    for field, value in sent.items():
+        if value is None:
+            raise _bad(_camel(field), "Required")
+    if scene.visual_status in ("queued", "running"):
+        raise ApiError(409, "already_running", "This scene's visual is already being made.")
+    changed = [f for f in visuals.VISUAL_FIELDS if f in sent and sent[f] != getattr(scene, f)]
+    if changed:
+        # The current visual no longer matches: if this take is cancelled, the scene must not
+        # show the old visual as ready (BUG-043).
+        projects.mark_visual_outdated(scene)
+        for field in changed:
+            setattr(scene, field, sent[field])
+    if scene.visual_source == "upload":
+        raise _bad("visualSource", "Uploads are chosen with a file; pick stock or an AI source to regenerate")
+    job = visuals.start_visual_job(project, scene)
+    # 60 an hour (QB4S2-004), counted last so a refused request doesn't use one up.
+    ratelimit.hit("visual", str(current_user().id), limit=60, seconds=3600)
+    projects.after_edit(project)
+    db.session.commit()
+    answer = jsonify(job=jobs.job_json(job, False))
+    jobs.dispatch([job])
+    return answer, 202
+
+
+@bp.get("/scenes/<scene_id>/stock-search")
+@require_user(verified=True)
+def stock_search(scene_id: str):
+    """C9. Stock clips for this scene, 20 a page. 60 searches an hour."""
+    scene, _ = projects.get_scene(current_user().id, scene_id)
+    query = " ".join((request.args.get("q") or scene.stock_query or scene.visual_prompt or "").split())
+    if not query:
+        raise _bad_query("q", "Type what to search for")
+    if len(query) > 100:
+        raise _bad_query("q", "Use 100 characters or fewer")
+    page_text = request.args.get("page", "1")
+    if not page_text.isdigit() or not 1 <= int(page_text) <= 25:
+        raise _bad_query("page", "Use a page number from 1 to 25")
+    if not visuals.stock_available():
+        raise ApiError(503, "provider_unavailable", jobs.MESSAGES["provider_unavailable"])
+    ratelimit.hit("stock_search", str(current_user().id), limit=60, seconds=3600)
+    db.session.rollback()  # nothing to save; no row stays locked while the provider answers
+    page = int(page_text)
+    try:
+        clips, more = visuals.stock_search(query, page)
+    except jobs.ProviderError:
+        raise ApiError(503, "provider_unavailable", jobs.MESSAGES["provider_unavailable"]) from None
+    return jsonify(items=[c.json() for c in clips], nextPage=page + 1 if more else None, query=query)
+
+
+@bp.post("/scenes/<scene_id>/visual/select")
+@require_user()
+def select_visual(scene_id: str):
+    """C10. A stock clip from C9 (downloaded in the background, 202) or a finished upload
+    (used at once, 200). 0 credits."""
+    body = read_body(SelectVisualBody)
+    scene, project = projects.get_scene(current_user().id, scene_id, lock=True)
+    refuse_while_scripting(project)
+    if body.asset_id is not None:
+        visuals.use_upload(project, scene, body.asset_id)
+        db.session.commit()
+        return jsonify(scene=projects.scene_json(scene), estimate=projects.estimate(project))
+    if not visuals.is_stock_id(body.stock):
+        raise _bad("stock", "Choose a clip from the stock search")
+    jobs.cancel_active(scene_ids=[scene.id], job_type="visual")
+    if scene.visual_source != "stock":
+        projects.mark_visual_outdated(scene)  # an AI visual being swapped for stock (BUG-043)
+        scene.visual_source = "stock"
+    job = visuals.start_visual_job(project, scene, stock_id=body.stock)
+    projects.after_edit(project)
     db.session.commit()
     answer = jsonify(job=jobs.job_json(job, False))
     jobs.dispatch([job])

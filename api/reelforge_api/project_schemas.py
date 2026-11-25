@@ -168,6 +168,27 @@ class SceneFields(Body):
     visual_source: VisualSource | None = None
 
 
+class VisualRegenerateBody(Body):
+    """C8. Changes sent here are saved to the scene first, as with C2."""
+
+    visual_source: Literal["stock", "ai_image", "ai_video"] | None = None
+    visual_prompt: Annotated[str, _line(PROMPT_MAX)] | None = None
+    stock_query: Annotated[str, _line(STOCK_QUERY_MAX)] | None = None
+
+
+class SelectVisualBody(Body):
+    """C10: a stock clip from C9 (`"pixabay:12345"`) or a finished upload, exactly one."""
+
+    stock: Annotated[str, _line(60, required=True)] | None = None
+    asset_id: Annotated[str, _line(60, required=True)] | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one(self):
+        if (self.stock is None) == (self.asset_id is None):
+            raise ValueError("Choose either a stock clip or an uploaded file")
+        return self
+
+
 class CreateSceneBody(SceneFields):
     narration: Annotated[str, _text(NARRATION_MAX, required=True)]
     position: Annotated[int, Field(ge=1)] | None = None

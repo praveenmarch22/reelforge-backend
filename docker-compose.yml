@@ -34,6 +34,13 @@ x-api-env: &api-env
   VOICE_PROVIDERS: ${VOICE_PROVIDERS:-elevenlabs,edge}
   ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
   ELEVENLABS_MODEL: ${ELEVENLABS_MODEL:-eleven_multilingual_v2}
+  # Visuals: stock clips from Pixabay, AI images from FLUX on Cloudflare Workers AI. Without
+  # keys the mock stands in for both, so the stack still runs.
+  STOCK_PROVIDERS: ${STOCK_PROVIDERS:-mock}
+  PIXABAY_API_KEY: ${PIXABAY_API_KEY:-}
+  IMAGE_PROVIDERS: ${IMAGE_PROVIDERS:-mock}
+  CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+  CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
 
 services:
   postgres:

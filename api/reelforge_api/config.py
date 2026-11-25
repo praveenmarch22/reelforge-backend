@@ -78,6 +78,15 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str = Field(default="", repr=False)
     elevenlabs_model: str = "eleven_multilingual_v2"
 
+    # Visuals. Stock video: Pixabay (Pexels goes in front once it issues keys again).
+    # AI images: FLUX on Cloudflare Workers AI. "mock" stands in offline for either.
+    stock_providers: str = "pixabay"
+    pixabay_api_key: str = Field(default="", repr=False)
+    image_providers: str = "cloudflare"
+    cloudflare_account_id: str = ""
+    cloudflare_api_token: str = Field(default="", repr=False)
+    cloudflare_image_model: str = "@cf/black-forest-labs/flux-1-schnell"
+
     # How background jobs are started. "celery": sent to the worker. "manual": kept in a list
     # for tests to run one by one. Empty = manual in the test environment, celery elsewhere.
     job_dispatch: Literal["celery", "manual"] | None = None
@@ -95,6 +104,12 @@ class Settings(BaseSettings):
         unknown = set(self.llm_provider_names) - {"gemini", "groq", "mock"}
         if unknown or not self.llm_provider_names:
             raise ValueError("LLM_PROVIDERS must list gemini, groq or mock, separated by commas")
+        for names, allowed, setting in (
+            (self.stock_provider_names, {"pixabay", "mock"}, "STOCK_PROVIDERS"),
+            (self.image_provider_names, {"cloudflare", "mock"}, "IMAGE_PROVIDERS"),
+        ):
+            if set(names) - allowed or not names:
+                raise ValueError(f"{setting} must list {' or '.join(sorted(allowed))}, separated by commas")
         unknown = set(self.voice_provider_names) - {"elevenlabs", "edge", "mock"}
         if unknown or not self.voice_provider_names:
             raise ValueError("VOICE_PROVIDERS must list elevenlabs, edge or mock, separated by commas")
@@ -111,6 +126,10 @@ class Settings(BaseSettings):
                 raise ValueError("LLM_PROVIDERS must not include the mock in production")
             if "mock" in self.voice_provider_names:
                 raise ValueError("VOICE_PROVIDERS must not include the mock in production")
+            if "mock" in self.stock_provider_names or "mock" in self.image_provider_names:
+                raise ValueError(
+                    "STOCK_PROVIDERS and IMAGE_PROVIDERS must not include the mock in production"
+                )
             if self.cookie_secure is False:
                 raise ValueError("COOKIE_SECURE cannot be off in production")
             if self.email_provider != "smtp":
@@ -126,6 +145,14 @@ class Settings(BaseSettings):
     @property
     def voice_provider_names(self) -> list[str]:
         return [name.strip() for name in self.voice_providers.split(",") if name.strip()]
+
+    @property
+    def stock_provider_names(self) -> list[str]:
+        return [name.strip() for name in self.stock_providers.split(",") if name.strip()]
+
+    @property
+    def image_provider_names(self) -> list[str]:
+        return [name.strip() for name in self.image_providers.split(",") if name.strip()]
 
     @property
     def jobs_dispatch(self) -> str:

@@ -90,6 +90,11 @@ def make_settings(**overrides) -> Settings:
         "groq_api_key": "",
         "voice_providers": "mock",
         "elevenlabs_api_key": "",
+        "stock_providers": "mock",
+        "pixabay_api_key": "",
+        "image_providers": "mock",
+        "cloudflare_account_id": "",
+        "cloudflare_api_token": "",
     }
     values.update(overrides)
     return Settings(**values)

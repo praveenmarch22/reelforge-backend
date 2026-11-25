@@ -40,6 +40,7 @@ MarkupSafe==3.0.4
 multidict==7.2.1
 mutagen==1.47.0
 packaging==26.3
+pillow==11.1.0
 pluggy==1.7.0
 prompt_toolkit==3.0.53
 propcache==0.5.4

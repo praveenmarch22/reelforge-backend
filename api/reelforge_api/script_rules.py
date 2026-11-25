@@ -98,8 +98,14 @@ def scene_voice_credits(narration: str) -> int:
     return COSTS["voiceSceneShort"] if seconds <= 15 else voice_credits(seconds)
 
 
+# Until AI video clips exist (milestone B7), an "AI video" scene gets an AI image with slow
+# motion and costs what an AI image costs (decided 2026-11-25).
+AI_VIDEO_AVAILABLE = False
+
+
 def visual_credits(source: str) -> int:
-    return {"ai_image": COSTS["aiImage"], "ai_video": COSTS["aiVideoClip"]}.get(source, 0)
+    ai_video = COSTS["aiVideoClip"] if AI_VIDEO_AVAILABLE else COSTS["aiImage"]
+    return {"ai_image": COSTS["aiImage"], "ai_video": ai_video}.get(source, 0)
 
 
 def default_visual_source(mode: str) -> str:

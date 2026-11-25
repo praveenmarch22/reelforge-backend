@@ -997,9 +997,14 @@ Every AI provider also has an offline **mock** (from the prototype) used in loca
 - A voice being made in the old text or voice is cancelled and refunded as soon as the scene's narration or mood, or the project's voice, changes.
 - Missing timings → transcribe with the Groq Whisper API (G-15). Uploaded voiceovers are transcribed the same way, requesting word-level timestamps. Files over the API's upload size limit are compressed to mono MP3 first (a 90-second voiceover is well under any limit).
 
-### Stock (Pexels), images (Cloudflare FLUX), video (Hugging Face Space)
-- As in the prototype. Downloads go straight to S3; the worker streams the file and never keeps large files in memory.
-- Provider attribution and license info are stored in `assets.meta`.
+### Stock (Pixabay, later Pexels), images (Cloudflare FLUX), video (Hugging Face Space)
+- Pexels paused new API keys, so **Pixabay** is the stock source for now (`STOCK_PROVIDERS=pixabay`, `PIXABAY_API_KEY`); Pexels goes in front once it issues keys again. Pixabay's terms are followed: search results are kept in Redis for 24 hours, clips are downloaded to our storage (never hotlinked), and stock search shows where results come from. Most Pixabay clips are landscape: the smallest rendition at least 1080 pixels high is downloaded, and the renderer crops it to fill 9:16 (G-9).
+- Downloads stream to S3 through a temporary file (in memory up to 16 MB, then on disk), at most 150 MB, and must be MP4. Only https addresses on the provider's own servers are fetched (`cdn.pixabay.com`, `pixabay.com`) and redirects are not followed, since the address comes from the provider's answer. The clip's still (at most 2 MB, read in pieces) is stored next to it; AI images get a 360-pixel thumbnail.
+- Regenerating remembers the last 30 clips a scene has had (`assets.meta.seen`) and picks a new one. A clip that fails to download makes way for the next; a stock provider that is down sends the job to the AI image.
+- **AI images:** FLUX.1 schnell on Workers AI (`IMAGE_PROVIDERS=cloudflare`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_IMAGE_MODEL`). It returns a 1024×1024 JPEG and takes no seed (each call differs); the renderer crops and animates it. The prompt adds the mood's look and the project's style anchor.
+- No stock clip fits → a simpler query (the first two words; the PRD's LLM-suggested keywords are left for later) → an AI image, not charged, up to 20 a day per creator (Redis counter), then `no_stock_match`. Until AI video arrives (B7), `ai_video` scenes get an AI image with slow motion at the AI image price.
+- Provider attribution and license info are stored in `assets.meta` (`providerId`, `author`, `pageUrl`, `license`, `thumbnailKey`; for images `model`, `prompt`, `motion`, `stockFallback`).
+- Every outside call names itself with `User-Agent: ReelForge/1.0` (Pixabay's firewall refuses unnamed clients).
 
 ### Render service
 
@@ -1056,7 +1061,7 @@ The Graph API version is a setting, so it can be updated without code changes.
 s3://reelforge-media-<env>/
   users/<user_id>/projects/<project_id>/
       voice/<job_id>.mp3            (one file per voice job; the asset row keeps the input hash)
-      visual/<scene_id>-<hash>.(mp4|jpg)
+      visual/<job_id>.(mp4|jpg)   (+ <job_id>-thumb.jpg for clips)
       keyframe/<scene_id>-<hash>.jpg
       music/<hash>.mp3
       uploads/<uuid>.<ext>

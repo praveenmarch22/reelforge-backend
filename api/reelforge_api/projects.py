@@ -104,21 +104,27 @@ def after_edit(project: Project, *, force: bool = False) -> None:
         return
     # A scene getting a new take still has its earlier, ready file: it counts as ready.
     redoing = {
-        job.scene_id
+        (job.scene_id, job.type)
         for job in db.session.execute(
             select(Job).where(
-                Job.project_id == project.id, Job.type == "voice", Job.state.in_(jobs_module.ACTIVE)
+                Job.project_id == project.id,
+                Job.type.in_(("voice", "visual")),
+                Job.state.in_(jobs_module.ACTIVE),
             )
         ).scalars()
         if job.input.get("previousStatus") == "ready"
     }
 
-    def voice_ok(s: Scene) -> bool:
-        return s.voice_status == "ready" or (
-            s.voice_status in ("queued", "running") and s.id in redoing and s.voice_asset_id is not None
+    def ok(s: Scene, kind: str, status: str, asset_id) -> bool:
+        return status == "ready" or (
+            status in ("queued", "running") and (s.id, kind) in redoing and asset_id is not None
         )
 
-    complete = bool(scenes) and all(voice_ok(s) and s.visual_status == "ready" for s in scenes)
+    complete = bool(scenes) and all(
+        ok(s, "voice", s.voice_status, s.voice_asset_id)
+        and ok(s, "visual", s.visual_status, s.visual_asset_id)
+        for s in scenes
+    )
     project.status = "ready" if complete else "draft"
 
 
@@ -225,7 +231,7 @@ def scene_json(scene: Scene) -> dict[str, Any]:
         "voiceStatus": scene.voice_status,
         "visualStatus": scene.visual_status,
         "voice": voice_media(scene.voice_asset, media),
-        "visual": media(scene.visual_asset),
+        "visual": visual_media(scene.visual_asset, media),
         "words": scene.words,
         "wordsEdited": scene.words_edited,
         "trimStart": scene.trim_start,
@@ -244,6 +250,31 @@ def voice_media(asset, media) -> dict[str, Any] | None:
             provider=asset.provider,
             voiceId=meta.get("voiceId", ""),
             estimatedTimings=bool(meta.get("estimatedTimings")),
+        )
+    return out
+
+
+def visual_media(asset, media) -> dict[str, Any] | None:
+    """The visual file plus what the editor shows: video or still (stills get a slow zoom or
+    pan), a thumbnail, and who made it with a link to its source page for stock credits."""
+    out = media(asset)
+    if out is not None:
+        meta = asset.meta or {}
+        is_video = asset.kind in ("video_clip",) or asset.content_type.startswith("video/")
+        thumb = meta.get("thumbnailKey")
+        if thumb:
+            thumbnail = get_storage().presigned_get(thumb)
+        else:
+            thumbnail = None if is_video else out["url"]
+        out.update(
+            kind="video" if is_video else "image",
+            thumbnailUrl=thumbnail,
+            provider=asset.provider,
+            author=meta.get("author", ""),
+            sourceUrl=meta.get("pageUrl", ""),
+            width=asset.width,
+            height=asset.height,
+            stockFallback=bool(meta.get("stockFallback")),
         )
     return out
 

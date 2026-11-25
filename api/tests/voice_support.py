@@ -11,6 +11,7 @@ import io
 import urllib.request
 
 import pytest
+import requests
 
 from reelforge_api import voices
 
@@ -29,13 +30,27 @@ class RealServiceCalled(AssertionError):
     pass
 
 
+# Services with real keys in the repo's .env (small free quotas). A call to one of them fails
+# the test outright. Any other address gets a connection error, as if offline, and is recorded
+# (see `network_attempts`), so code that quietly reaches out can be caught by a test.
+REAL_PROVIDER_HOSTS = (
+    "elevenlabs.io", "speech.platform.bing.com", "pixabay.com", "cloudflare.com",
+    "googleapis.com", "groq.com",
+)  # fmt: skip
+NETWORK_ATTEMPTS: list[tuple[str, str]] = []
+
+
 @pytest.fixture(autouse=True)
 def no_real_voice_services(monkeypatch):
-    """Fails the test instead of calling ElevenLabs, Edge TTS or anything else on the network
-    through requests. Tests that exercise those providers replace these stubs with their own."""
+    """No test reaches the network through requests or edge-tts. Tests that exercise a
+    provider replace these stubs with their own."""
+    NETWORK_ATTEMPTS.clear()
 
     def refuse_http(method, url, *args, **kwargs):
-        raise RealServiceCalled(f"a test tried to call {method} {url}")
+        NETWORK_ATTEMPTS.append((str(method).upper(), str(url)))
+        if any(host in str(url) for host in REAL_PROVIDER_HOSTS):
+            raise RealServiceCalled(f"a test tried to call {method} {url}")
+        raise requests.ConnectionError(f"tests are offline: {method} {url}")
 
     class RefuseEdge:
         def __init__(self, *args, **kwargs):
@@ -47,6 +62,15 @@ def no_real_voice_services(monkeypatch):
         "requests.Session.request", lambda self, method, url, *a, **k: refuse_http(method, url)
     )
     monkeypatch.setattr("edge_tts.Communicate", RefuseEdge)
+    yield
+    real = [a for a in NETWORK_ATTEMPTS if any(h in a[1] for h in REAL_PROVIDER_HOSTS)]
+    assert not real, f"real provider calls were attempted: {real}"
+
+
+@pytest.fixture
+def network_attempts() -> list[tuple[str, str]]:
+    """Every call that reached the guard during the test (none reached the network)."""
+    return NETWORK_ATTEMPTS
 
 
 def regenerate(browser, scene_id: str, body: dict | None = None, *, key: str | None = None, **kwargs):

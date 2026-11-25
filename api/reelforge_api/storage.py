@@ -65,6 +65,10 @@ class Storage:
     def put_bytes(self, key: str, data: bytes, content_type: str) -> None:
         self.client.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
 
+    def put_fileobj(self, key: str, fileobj, content_type: str) -> None:
+        """Streams a file to storage in parts, so a large clip is never held in memory."""
+        self.client.upload_fileobj(fileobj, self.bucket, key, ExtraArgs={"ContentType": content_type})
+
     def exists(self, key: str) -> bool:
         try:
             self.client.head_object(Bucket=self.bucket, Key=key)

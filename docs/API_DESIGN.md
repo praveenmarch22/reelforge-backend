@@ -130,7 +130,7 @@ These appear in many responses.
  "trimStart": 0, "trimEnd": null, "lastError": null, "estimatedSeconds": 3.2}
 ```
 
-`estimatedSeconds` is the spoken length estimated from the narration (2.5 words per second, PRD S4); the real length comes from the voiceover. `voice` and `visual` are null until generated. Their `url` is a link to the file in storage, valid for 2 hours and different on every response (key media by `assetId`); fetch the project again for fresh links. `voice` also has `provider` (`elevenlabs` or `edge`), `voiceId` and `estimatedTimings` (true when the caption timings were spread evenly and are only roughly in sync). `words` are the voiceover's word timings in seconds (empty until the first voice).
+`estimatedSeconds` is the spoken length estimated from the narration (2.5 words per second, PRD S4); the real length comes from the voiceover. `voice` and `visual` are null until generated. Their `url` is a link to the file in storage, valid for 2 hours and different on every response (key media by `assetId`); fetch the project again for fresh links. `voice` also has `provider` (`elevenlabs` or `edge`), `voiceId` and `estimatedTimings` (true when the caption timings were spread evenly and are only roughly in sync). `visual` also has `kind` (`video` or `image`; stills get a slow zoom or pan), `thumbnailUrl` (a small still for lists: the clip's still, or a 360-pixel copy of an AI image), `provider` (`pixabay`, `cloudflare`, `upload`…), `author` and `sourceUrl` (stock credits), `width`, `height` and `stockFallback` (an AI image used because no stock clip fitted). `words` are the voiceover's word timings in seconds (empty until the first voice).
 
 **Job**
 ```json
@@ -139,7 +139,7 @@ These appear in many responses.
  "error": null, "output": null, "queuedAt": "…", "finishedAt": null}
 ```
 
-When `state` is `failed`, `error` is `{"code", "message"}`; the message is plain language for the creator. Codes: `content_refused` (the AI's content rules refused it; edit the text), `provider_unavailable` (no AI service available right now), `provider_failed` (the AI service did not answer usefully after retries and fallbacks), `scene_changed` (a rewrite or voice whose scene was edited or deleted meanwhile; the voice then shows `outdated`, or `missing` if the scene never had one), `timed_out` (stopped after its time limit), `queue_unavailable` (could not be started), `internal_error`. Credits are refunded for every failure (`creditsRefunded: true`). Jobs of a deleted scene are kept with `sceneId: null`.
+When `state` is `failed`, `error` is `{"code", "message"}`; the message is plain language for the creator. Codes: `content_refused` (the AI's content rules refused it; edit the text), `provider_unavailable` (no AI service available right now), `provider_failed` (the AI service did not answer usefully after retries and fallbacks), `scene_changed` (a rewrite or voice whose scene was edited or deleted meanwhile; the voice then shows `outdated`, or `missing` if the scene never had one), `timed_out` (stopped after its time limit), `stock_unavailable` (a stock clip chosen with C10 is no longer offered), `no_stock_match` (no stock clip fits the scene and the day's free AI images are used up), `queue_unavailable` (could not be started), `internal_error`. Credits are refunded for every failure (`creditsRefunded: true`). Jobs of a deleted scene are kept with `sceneId: null`.
 
 **Render**
 ```json
@@ -262,11 +262,17 @@ While the project's script is being written (status `scripting`), C1–C6 answer
 - A failed or cancelled voice keeps the scene's earlier voice file, if any. A `ready` project goes back to `draft` when a voice fails; it stays `ready` while a new take is being made.
 - Errors: `409 words_edited` if `wordsEdited` is true and `confirmReplaceWords` is not (CA-4; the new voice replaces the hand-fixed words), `409 already_running` (the scene's voice is already being made, or the script is being written), `402 insufficient_credits`, `503 provider_unavailable`.
 
-**C8. `POST /scenes/:id/visual/regenerate`**: Verified, **idempotent**. Body: optional `visualSource`, `visualPrompt`, `stockQuery`. Forces a new result even if inputs are unchanged (new seed or next stock result). `202` → `{"job": Job}`. Cost depends on source (0 stock, 1 AI image, 10 AI clip).
+**C8. `POST /scenes/:id/visual/regenerate`**: Verified, **idempotent**. Body (optional): `visualSource` (`stock`, `ai_image` or `ai_video`), `visualPrompt`, `stockQuery`; what is sent is saved to the scene first, as with C2. Always makes something new: a stock clip this scene hasn't had before (the last 30 are remembered; up to 3 pages of results are looked through), or a new AI image. `202` → `{"job": Job}`. Cost by source: 0 stock, 1 AI image, and until AI video arrives (milestone B7) an `ai_video` scene gets an AI image with slow motion for 1 credit (10 once real clips exist).
+- **Stock:** searches with `stockQuery` (else `visualPrompt`, else the narration), then with a shorter query, and picks a clip at least as long as the scene (its voice if made, else the estimate), sharp enough for the vertical frame. Nothing fits, or the stock provider is down → an AI image at no extra charge (PRD G-6; up to 20 a day per creator, counted only when an image is made, then the job fails with `no_stock_match`, or `provider_unavailable` if stock was down); the job's `output.stockFallback` is then true. A clip that fails to download makes way for the next fitting one. Clips are downloaded to our storage with their thumbnail; the author and source page are kept for credits.
+- **AI image:** FLUX from the visual prompt, the mood's look and the project's style and character (the same style anchor for every scene). The renderer animates stills with a slow zoom or pan.
+- Status follows the job like the voice (C7): `queued`, `running`, then `ready` or `failed`. Editing the scene's `visualSource`, `visualPrompt` or `stockQuery` (C2), or the project's `style` or `character` for AI scenes (B5), while a visual is being made cancels and refunds it.
+- If the request changes the source, prompt or query, the current visual is marked `outdated` first, so cancelling the new take leaves the scene `outdated` rather than showing the old visual as ready.
+- 60 an hour per creator, counted only when work starts.
+- Errors: `400` for `visualSource: "upload"` (uploads are chosen with C10), `409 already_running` (the visual is already being made, or the script is being written), `402 insufficient_credits`, `429 rate_limited`, `503 provider_unavailable`. Job error codes `stock_unavailable` (a clip chosen with C10 is gone) and `no_stock_match` (no clip fits and today's free AI images are used up).
 
-**C9. `GET /scenes/:id/stock-search`**: Verified. Query: `q` (default the scene's stock query), `page`. `200` → `{"items": [{"providerId": "pexels:12345", "thumbnailUrl", "previewUrl", "durationSeconds", "width", "height", "author"}], "nextPage"}`. 60 per hour.
+**C9. `GET /scenes/:id/stock-search`**: Verified. Query: `q` (≤ 100 characters; default the scene's stock query, else its visual prompt), `page` (1–25). `200` → `{"items": [{"providerId": "pixabay:12345", "thumbnailUrl", "previewUrl", "durationSeconds", "width", "height", "author", "source": "pixabay", "pageUrl"}], "nextPage", "query"}`, 20 a page, `nextPage` null on the last. Results are kept for 24 hours (Pixabay's terms). `thumbnailUrl` and `previewUrl` point at the stock site and are only for showing results; the screen must show where results come from (for example "Videos from Pixabay"). 60 per hour; `503 provider_unavailable` when no stock provider answers. Pixabay is the source until Pexels issues keys again (decided 2026-11-25).
 
-**C10. `POST /scenes/:id/visual/select`**: User. Body: `{"stock": "pexels:12345"}` **or** `{"assetId": "…"}` (a completed upload). `202` → `{"job": Job}` for stock (downloaded in the background), or `200` → `{"scene": Scene}` for an upload. 0 credits.
+**C10. `POST /scenes/:id/visual/select`**: User. Body: `{"stock": "pixabay:12345"}` (from C9) **or** `{"assetId": "…"}` (a finished image or video upload of this project, milestone B7). `202` → `{"job": Job}` for stock (downloaded in the background; the scene's `visualSource` becomes `stock`), or `200` → `{"scene": Scene, "estimate": Estimate}` for an upload (`visualSource` becomes `upload`). Any visual being made for the scene is cancelled and refunded first. 0 credits.
 
 ### D. Uploads, voices and music (4)
 
@@ -389,6 +395,7 @@ Reachable only from the workers' private network; requests carry the shared secr
 | A11, A12 current-password checks | 5 per minute per user |
 | B1 ideas, B3/B8 scripts, B9 hooks, C6 rewrite, F4 caption | 20 per hour per user combined; only requests that start work count |
 | C9 stock search | 60 per hour per user |
+| C8 visual regenerate | 60 per hour per user; only requests that start work count |
 | D1 uploads | 30 per hour per user |
 | Everything else | 300 per minute per user |
 

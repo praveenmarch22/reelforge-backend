@@ -12,6 +12,7 @@ import requests
 
 log = logging.getLogger(__name__)
 T = TypeVar("T")
+USER_AGENT = "ReelForge/1.0"
 
 
 class ProviderError(Exception):
@@ -64,6 +65,8 @@ def http(method: str, url: str, *, timeout: float = 60, **kwargs) -> requests.Re
     Error messages keep the provider's status and a short part of its answer, never the
     request (which carries the API key in a header, and the creator's text in the body).
     """
+    # Some providers' firewalls refuse unnamed clients, so every call says who it is.
+    kwargs["headers"] = {"User-Agent": USER_AGENT, **(kwargs.get("headers") or {})}
     try:
         resp = requests.request(method, url, timeout=timeout, **kwargs)
     except (requests.Timeout, requests.ConnectionError) as e:

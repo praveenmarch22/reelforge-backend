@@ -245,7 +245,22 @@ def update_project(project_id: str):
             projects.mark_voice_outdated(scene)
     for field in ("style", "character"):
         if sent.get(field) is not None and sent[field] != getattr(project, field):
+            # AI visuals being made in the old style are stopped and refunded.
+            # So are stock scenes showing a fallback AI image, whose new take may be one too
+            # (QB4S2-010).
+            ai_scenes = [
+                s.id
+                for s in project.scenes
+                if s.visual_source in ("ai_image", "ai_video")
+                or (s.visual_asset is not None and (s.visual_asset.meta or {}).get("stockFallback"))
+            ]
+            if ai_scenes:
+                jobs.cancel_active(scene_ids=ai_scenes, job_type="visual")
             setattr(project, field, sent[field])
+            # Stock scenes showing an AI image (no clip fitted) are in the old style too (QB4S2-006).
+            for scene in project.scenes:
+                if scene.visual_asset is not None and (scene.visual_asset.meta or {}).get("stockFallback"):
+                    projects.mark_visual_outdated(scene)
             for scene in project.scenes:
                 if scene.visual_source in ("ai_image", "ai_video"):
                     projects.mark_visual_outdated(scene)

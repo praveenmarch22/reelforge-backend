@@ -273,8 +273,12 @@ def new_asset(database, user_id: str, project_id: str, kind: str = "voice") -> s
 def unsigned(scene: dict) -> dict:
     """The scene with its file links cut to the file's address. A presigned link carries the
     second it was signed in, so two reads of the same file differ when a second passes."""
+
+    def cut(link):
+        return link.split("?", 1)[0] if isinstance(link, str) else link
+
     media = {
-        k: {**m, "url": m["url"].split("?", 1)[0]} if m else m
+        k: {**m, **{f: cut(m[f]) for f in ("url", "thumbnailUrl") if f in m}} if m else m
         for k, m in scene.items()
         if k in ("voice", "visual")
     }

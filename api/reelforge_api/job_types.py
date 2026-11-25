@@ -400,5 +400,9 @@ class Hooks:
 
 
 from .generation import VoiceJob  # noqa: E402 - generation imports this module's neighbours
+from .visuals import VisualJob  # noqa: E402
 
-TYPES = {"ideas": Ideas, "script": Script, "rewrite_scene": RewriteScene, "hooks": Hooks, "voice": VoiceJob}
+TYPES = {
+    "ideas": Ideas, "script": Script, "rewrite_scene": RewriteScene, "hooks": Hooks,
+    "voice": VoiceJob, "visual": VisualJob,
+}  # fmt: skip

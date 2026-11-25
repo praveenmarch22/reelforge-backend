@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from reelforge_api.script_rules import estimated_seconds, voice_credits
+from reelforge_api.script_rules import estimated_seconds, visual_credits, voice_credits
 from reelforge_api.tasks.accounts import purge_deleted
 
 from .projects_support import (
@@ -577,7 +577,11 @@ def test_duplicating_copies_script_and_settings_and_reuses_files_for_free(app, d
     assert not set(scene_ids(copy)) & set(scene_ids(source))
     assert scene_row(database, copy["scenes"][0]["id"])["voice_asset_id"] == uuid.UUID(voice)
     assert balance(me.browser) == before
-    assert get_project(me.browser, project["id"]) == source, "the original is untouched"
+    again = get_project(me.browser, project["id"])
+    assert {**again, "scenes": [unsigned(s) for s in again["scenes"]]} == {
+        **source,
+        "scenes": [unsigned(s) for s in source["scenes"]],
+    }, "the original is untouched"
 
 
 def test_a_copy_of_work_in_progress_needs_that_work_again(app, database, outbox):
@@ -647,10 +651,14 @@ def test_the_estimate_counts_what_is_missing_or_outdated(app, database, outbox):
     assert voices_cost == 4, "per scene it would have been 4 + 2 + 2"
     assert item(estimate, "voice") == (3, voices_cost)
     assert item(estimate, "ai_image") == (1, 1)
-    assert item(estimate, "ai_video") == (1, 10)
+    assert item(estimate, "ai_video") == (1, visual_credits("ai_video")), "an AI image until B7: 1 credit"
     assert item(estimate, "visual") == (1, 0), "stock footage is free"
     assert item(estimate, "music") == (1, 0)
-    assert estimate["credits"] == sum(entry["credits"] for entry in estimate["items"]) == voices_cost + 1 + 10
+    assert (
+        estimate["credits"]
+        == sum(entry["credits"] for entry in estimate["items"])
+        == voices_cost + 1 + visual_credits("ai_video")
+    )
     assert estimate["balance"] == balance(me.browser)
 
     # Outdated and failed parts count; ready, queued and running ones don't.

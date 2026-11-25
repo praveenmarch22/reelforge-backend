@@ -35,12 +35,12 @@ The approach for the backend will be discussed after the frontend. The scope bel
 |---|---|---|
 | B1 | Backend setup | Flask app, PostgreSQL (schema.sql), Redis, Celery, MinIO, Docker Compose |
 | B2 | Accounts | Auth endpoints (A1–A12), email |
-| B3 | Projects, scripts and jobs | Ideas, scripts, scenes, jobs, credits (B, C, G, H groups) |
-| B4 | Generation pipeline | Voice, visuals, music, timeline (built on the prototype in `pipeline/`) |
+| B3 | Projects, scripts and jobs | Ideas, scripts, scenes, jobs, credits: B1–B10, C1–C6, G, H; the language models (Gemini, Groq); credit reservation, refunds and monthly reset |
+| B4 | Generation pipeline | Voice, visuals, music, timeline (built on the prototype in `pipeline/`): B11, B12, C7–C10, D3 voices, D4 music library |
 | B5 | Rendering | Render service from the prototype renderer |
 | B6 | Instagram | Connect and publish (F group) |
-| B7 | Full AI mode and audio extras | AI video provider, uploads, Whisper |
-| B8 | Admin and scheduled tasks | Admin endpoints, cleanup, token refresh, credit reset |
+| B7 | Full AI mode and audio extras | AI video provider, uploads (D1, D2), Whisper |
+| B8 | Admin and scheduled tasks | Admin endpoints, cleanup of replaced files, Instagram token refresh (the monthly credit reset and stuck-job check came with B3) |
 
 ## Track I: integration and launch
 

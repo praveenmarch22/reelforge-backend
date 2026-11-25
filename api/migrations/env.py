@@ -85,11 +85,15 @@ def run_migrations_online():
     # when there are no changes to the schema
     # reference: http://alembic.zzzcomputing.com/en/latest/cookbook.html
     def process_revision_directives(context, revision, directives):
+        # The schema is written by hand (docs/schema.sql, then hand-written migrations), and
+        # the models describe only part of it, so a generated migration would drop the tables
+        # the models don't cover. `flask db migrate` is refused; use `flask db revision`.
         if getattr(config.cmd_opts, 'autogenerate', False):
-            script = directives[0]
-            if script.upgrade_ops.is_empty():
-                directives[:] = []
-                logger.info('No changes in schema detected.')
+            directives[:] = []
+            raise SystemExit(
+                'Generated migrations are switched off: write it by hand with '
+                '"flask db revision -m ..." (see README, Database changes).'
+            )
 
     conf_args = current_app.extensions['migrate'].configure_args
     if conf_args.get("process_revision_directives") is None:

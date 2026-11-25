@@ -687,7 +687,7 @@ X-CSRF-Token: …
 {"project": {"id": "6f1c…", "status": "scripting", …}, "job": {"id": "…", "type": "script", "state": "queued"}}
 ```
 
-To start from a pasted script instead, send `"script": "full text…"` in place of `topic`; the API splits it into scenes with the LLM and skips writing.
+To start from a pasted script instead, send `"script": "full text…"` in place of `topic`; the API splits it into scenes itself (at sentence ends, so no word changes) and the LLM only adds titles, visual descriptions and moods.
 
 **Edit a scene**
 
@@ -893,7 +893,8 @@ Version 1 uses **polling**: while a project has active jobs, the editor calls `G
 ### Queues
 | Queue | Tasks | Concurrency (start) | Why separate |
 |---|---|---|---|
-| `llm` | ideas, script, rewrite, caption | 4 | Fast, cheap |
+| `default` | anything not routed elsewhere (sending email, the worker check) | 2 | Small and quick |
+| `llm` | ideas, script, rewrite, hooks, caption | 4 | Fast, cheap |
 | `voice` | voiceover per scene | 2 | ElevenLabs free-tier limits |
 | `visuals` | stock search and download, AI images | 4 | |
 | `ai_video` | image-to-video | 1 | Slow, scarce free quota; must not block other work |

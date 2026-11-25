@@ -1,14 +1,14 @@
 # ReelForge: project status
 
-**Last updated:** 2026-11-24
+**Last updated:** 2026-11-25
 
 This is the single place to see where the project stands. It is updated at the end of every working session. The milestone definitions are in [MILESTONES.md](MILESTONES.md).
 
 ## Where we are
 
-**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend is built one task at a time: B1 (setup) and B2 (accounts) are done, both reviewed by QA and covered by automated tests.**
+**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend is built one task at a time: B1 (setup), B2 (accounts) and B3 (projects, scripts, scenes, jobs and credits) are done, each reviewed by QA and covered by automated tests (938 backend tests). Script writing runs on an offline stand-in until the Gemini and Groq keys are added.**
 
-Next up: **B3 Projects and scenes** on the backend (to be agreed first) and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
+Next up: the Gemini and Groq keys, then **B4 Generation** on the backend (to be agreed first) and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
 
 ## Milestones
 
@@ -29,7 +29,8 @@ Next up: **B3 Projects and scenes** on the backend (to be agreed first) and **F5
 | F9 | Frontend hardening | Not started | |
 | B1 | Backend setup | Done | Flask API, Postgres (16 tables from the baseline migration), Redis, Celery worker, MinIO, Docker Compose. QA reviewed; see "B1 and B2 result" below |
 | B2 | Accounts | Done | Sign-up with email verification, login, 30-day sessions, password reset, profile, change password, delete account (API A1-A12). QA reviewed; both rule decisions made |
-| B3–B8 | Backend features | Not started | Built one task at a time, each agreed with the product owner first |
+| B3 | Projects, scripts and jobs | Done | API B1–B10, C1–C6, G, H; language models (Gemini, Groq, offline mock); credits reserved, refunded and reset monthly. QA verdict was fail (a credit race); fixed and retested. See [FIX_LOG_B3.md](docs/qa/FIX_LOG_B3.md) |
+| B4–B8 | Backend features | Not started | Built one task at a time, each agreed with the product owner first |
 | I1–I3 | Integration and launch | Not started | |
 
 ## What exists today
@@ -190,3 +191,4 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 | 2026-11-24 | F4 onboarding: QA and Tester findings fixed over three rounds, API design and PRD updated, committed. Backend work paused: Docker Desktop's engine stopped responding |
 | 2026-11-24 | Docker Desktop restarted. Backend B1 reviewed by QA and its findings fixed. Backend B2 Accounts built from the design docs, tested (492 backend tests) and reviewed by QA; fixes over three rounds; API design updated |
 | 2026-11-24 | Two account rules decided and built: the verification link signs in only when nobody else is signed in; deleting an account frees its email at once. 515 backend tests |
+| 2026-11-25 | Backend B3 built from the design docs: projects, scripts (written or pasted), scenes, background jobs, credits. QA found a credit race (blocker) and 13 more issues, the Tester 2 bugs; all fixed. 938 backend tests |

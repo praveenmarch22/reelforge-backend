@@ -189,6 +189,18 @@ _MESSAGES = {
     "string_too_short": "Required",
     "string_too_long": "Too long",
     "literal_error": "That value isn't allowed",
+    "greater_than_equal": "Too small",
+    "greater_than": "Too small",
+    "less_than_equal": "Too large",
+    "less_than": "Too large",
+    "int_type": "Must be a whole number",
+    "float_type": "Must be a number",
+    "finite_number": "Must be a number",
+    "list_type": "Must be a list",
+    "too_long": "Too many items",
+    "too_short": "Too few items",
+    "uuid_type": "Not a valid id",
+    "uuid_parsing": "Not a valid id",
 }
 
 B = TypeVar("B", bound=Body)
@@ -210,12 +222,16 @@ def _field_errors(error: ValidationError) -> dict[str, str]:
     return fields
 
 
-def read_body(model: type[B]) -> B:
-    """The request's JSON body as `model`, or 400 validation_error with details.fields."""
-    # A body in another format (a form, plain text) is 415. No body at all is a 400 below.
-    if not request.is_json and (request.content_length or request.mimetype):
-        raise ApiError(415, "unsupported_media_type", "Send the details as JSON.")
-    data: Any = request.get_json(silent=True)
+def read_body(model: type[B], *, allow_empty: bool = False) -> B:
+    """The request's JSON body as `model`, or 400 validation_error with details.fields.
+    `allow_empty`: for endpoints whose body is optional, no body counts as `{}`."""
+    if allow_empty and not request.content_length and not request.mimetype:
+        data: Any = {}
+    else:
+        # A body in another format (a form, plain text) is 415. No body at all is a 400 below.
+        if not request.is_json and (request.content_length or request.mimetype):
+            raise ApiError(415, "unsupported_media_type", "Send the details as JSON.")
+        data = request.get_json(silent=True)
     if not isinstance(data, dict):
         raise ApiError(400, "validation_error", "Send the details as a JSON object.", {"fields": {}})
     try:

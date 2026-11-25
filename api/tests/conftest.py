@@ -21,7 +21,7 @@ from flask_migrate import upgrade
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
-from reelforge_api import create_app, mail
+from reelforge_api import create_app, jobs, mail
 from reelforge_api.config import Settings
 from reelforge_api.extensions import db
 
@@ -84,6 +84,10 @@ def make_settings(**overrides) -> Settings:
         "cookie_secure": None,
         "cookie_domain": "",
         "trusted_proxy_hops": 0,
+        # The offline stand-in; tests about the real providers stub their HTTP calls.
+        "llm_providers": "mock",
+        "gemini_api_key": "",
+        "groq_api_key": "",
     }
     values.update(overrides)
     return Settings(**values)
@@ -241,8 +245,13 @@ def _wipe(app) -> None:
     with app.app_context(), db.engine.begin() as connection:
         # Everything a user owns hangs off users, so this empties all account data.
         connection.execute(text("DELETE FROM users"))
+        # Not owned by a user: the admin's provider switches and the usage counters.
+        connection.execute(text("DELETE FROM provider_switches"))
+        connection.execute(text("DELETE FROM usage_daily"))
+        connection.execute(text("DELETE FROM music_tracks"))
     app.extensions["redis"].flushdb()
     mail.outbox.clear()
+    jobs.manual_queue.clear()
 
 
 @pytest.fixture

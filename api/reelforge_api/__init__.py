@@ -57,7 +57,18 @@ def create_app(settings: Settings | None = None) -> Flask:
                     "schedule": crontab(hour=3, minute=40),
                     "options": {"queue": "maintenance"},
                 },
+                "fail-stuck-jobs": {
+                    "task": "jobs.fail_stuck",
+                    "schedule": crontab(minute="*/5"),
+                    "options": {"queue": "maintenance"},
+                },
+                "reset-monthly-credits": {
+                    "task": "credits.reset_monthly",
+                    "schedule": crontab(minute=5),
+                    "options": {"queue": "maintenance"},
+                },
             },
+            "task_routes": {"jobs.run": {"queue": "llm"}},
         },
     )
     if settings.trusted_proxy_hops:
@@ -89,9 +100,9 @@ def create_app(settings: Settings | None = None) -> Flask:
     )
 
     from . import tasks  # noqa: F401 - registers the Celery tasks
-    from .routes import auth, me, system
+    from .routes import auth, jobs_credits, me, projects, scenes, system
 
-    for blueprint in (system.bp, auth.bp, me.bp):
+    for blueprint in (system.bp, auth.bp, me.bp, projects.bp, scenes.bp, jobs_credits.bp):
         app.register_blueprint(blueprint, url_prefix=API_PREFIX + (blueprint.url_prefix or ""))
     register_cli(app)
     return app

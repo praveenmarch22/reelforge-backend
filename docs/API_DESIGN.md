@@ -72,7 +72,9 @@ Of the 52 creator-facing endpoints, 49 are needed for version 1 (P0) and 3 are P
 | 405 | `method_not_allowed` | The address exists but not with this method; `Allow` header lists the ones that do |
 | 409 | `email_taken` | Sign-up with an existing email |
 | 409 | `already_verified` | Resend verification when the email is already verified |
-| 409 | `already_running` | Same job already active |
+| 409 | `already_running` | Same job already active, or the project's script is still being written (scene edits wait for it) |
+| 409 | `job_finished` | Cancelling a job that has already finished |
+| 409 | `no_script` | Hook suggestions for a project that has no scenes yet |
 | 409 | `not_ready` | Render with scenes not ready; `details.scenes` |
 | 409 | `too_long` | Timeline over 90 s; `details.seconds` |
 | 409 | `render_outdated` | Publishing a render older than the current timeline (allowed with `"confirmOutdated": true`) |
@@ -114,7 +116,7 @@ These appear in many responses.
 
 `status` is one of the 11 project statuses in [DB_DESIGN.md](DB_DESIGN.md): `scripting`, `draft`, `generating`, `needs_attention`, `ready`, `rendering`, `render_failed`, `rendered`, `posting`, `post_failed`, `posted`. The PRD's shorter list (D1) is the creator-facing grouping: the web app shows `render_failed` and `post_failed` as "Failed", and groups `scripting` with drafts in the library filter while still showing its progress. Lists are sorted by `updatedAt`, newest first. Text fields that have no value yet (for example `niche`, `defaults.voiceId`) are empty strings, never null.
 
-**Project** (full): ProjectSummary plus `topic`, `tone`, `style`, `character`, `voiceId`, `musicMood`, `music` (`{"trackId"}` or `{"assetId"}` or null), `settings`, `estimatedSeconds`, `timelineVersion`, `postCaption`, `hashtags`, `scenes` (array of Scene), `activeJobs` (array of Job), `latestRender` (Render or null), `latestPost` (Post or null), `createdAt`.
+**Project** (full): ProjectSummary plus `topic`, `tone`, `style`, `character`, `voiceId`, `musicMood`, `music` (`{"trackId"}` or `{"assetId"}` or null), `settings`, `estimatedSeconds`, `wordCount` (live count for the editor, PRD S7), `timelineVersion`, `postCaption`, `hashtags`, `scenes` (array of Scene), `activeJobs` (array of Job), `latestRender` (Render or null), `latestPost` (Post or null), `createdAt`.
 
 **Scene**
 ```json
@@ -124,8 +126,10 @@ These appear in many responses.
  "voice": {"assetId": "…", "url": "https://…", "durationSeconds": 3.6},
  "visual": {"assetId": "…", "kind": "video", "url": "https://…", "thumbnailUrl": "https://…", "durationSeconds": 7.0, "provider": "pexels"},
  "words": [{"text": "Most", "start": 0.05, "end": 0.31}], "wordsEdited": false,
- "trimStart": 0, "trimEnd": null, "lastError": null}
+ "trimStart": 0, "trimEnd": null, "lastError": null, "estimatedSeconds": 3.2}
 ```
+
+`estimatedSeconds` is the spoken length estimated from the narration (2.5 words per second, PRD S4); the real length comes from the voiceover. `voice` and `visual` are null until generated.
 
 **Job**
 ```json
@@ -133,6 +137,8 @@ These appear in many responses.
  "provider": "elevenlabs", "creditsReserved": 2, "creditsRefunded": false,
  "error": null, "output": null, "queuedAt": "…", "finishedAt": null}
 ```
+
+When `state` is `failed`, `error` is `{"code", "message"}`; the message is plain language for the creator. Codes: `content_refused` (the AI's content rules refused it; edit the text), `provider_unavailable` (no AI service available right now), `provider_failed` (the AI service did not answer usefully after retries and fallbacks), `scene_changed` (a rewrite whose scene was edited or deleted meanwhile), `timed_out` (stopped after its time limit), `queue_unavailable` (could not be started), `internal_error`. Credits are refunded for every failure (`creditsRefunded: true`). Jobs of a deleted scene are kept with `sceneId: null`.
 
 **Render**
 ```json
@@ -195,9 +201,11 @@ URLs to media are presigned and valid for 2 hours.
 **B2. `GET /projects`**: User. Query: `status` (one status or a comma-separated list, for example `render_failed,post_failed`), `q` (title search), `limit`, `cursor`. `200` → `{"items": [ProjectSummary], "nextCursor", "counts": {"total": 12, "posted": 8}}`. `counts` covers all of the user's projects, ignoring the filters; the dashboard tiles use it. While any returned item is in progress, the client polls every 2 s.
 
 **B3. `POST /projects`**: Verified. Create a project and start writing its script.
-- Body: `topic` **or** `script` (pasted text, ≤ 5,000 characters), `tone`, `mode`, `targetSeconds` (15/30/60/90), `style`, `character`, `voiceId` (defaults from the profile).
+- Body: `topic` (≤ 300 characters) **or** `script` (pasted text, ≤ 5,000 characters); neither gives `fields.topic`, both gives `fields.script`, `tone`, `mode`, `targetSeconds` (15/30/60/90), `style`, `character`, `voiceId` (defaults from the profile).
 - `202` → `{"project": Project, "job": Job}` (status `scripting`; becomes `draft` when the script is ready).
-- Cost: 1 credit. Errors: `402`, `422 content_refused` (arrives on the job).
+- Cost: 1 credit. Errors: `402`, `429`, `503 provider_unavailable` (no language model available; nothing is charged); `content_refused` arrives on the job.
+- A pasted script is split into scenes by the server at sentence ends (about 30 words per scene, a paragraph break always starts a new one), so the creator's words never change; the language model only adds the title, on-screen text, visual descriptions and moods.
+- If writing fails, the job fails with its error and the credit is refunded; the project stays, as a `draft` with no scenes, and **Write script** (B8) tries again exactly as the first attempt (a pasted script is prepared again, and the AI names the project).
 
 **B4. `GET /projects/:id`**: User. `200` → `{"project": Project}`. Polled every 2 s while `activeJobs` is not empty.
 
@@ -207,11 +215,11 @@ URLs to media are presigned and valid for 2 hours.
 
 **B6. `DELETE /projects/:id`**: User. `204`. Cancels active jobs, refunds them, soft-deletes; files purged after 7 days.
 
-**B7. `POST /projects/:id/duplicate`** (P1): User. `201` → `{"project": Project}`. Copies script and settings; reuses existing assets (no credits).
+**B7. `POST /projects/:id/duplicate`** (P1): User. `201` → `{"project": Project}`. Copies script and settings; reuses existing assets (no credits). `409 already_running` while the source's script is being written.
 
-**B8. `POST /projects/:id/script/regenerate`**: Verified. Body: optional `instructions` ("make it funnier"). Replaces all scenes. `202` → `{"job": Job}`. 1 credit. Error `409 already_running`.
+**B8. `POST /projects/:id/script/regenerate`**: Verified. Body: optional `instructions` ("make it funnier"). Replaces all scenes; work still running on them is cancelled and refunded. The title, chosen music mood and an edited caption are kept. `202` → `{"job": Job}`. 1 credit. Error `409 already_running` (also while rendering or posting). If it fails, the project returns to its previous status with its scenes untouched.
 
-**B9. `POST /projects/:id/hooks`** (P1): Verified. `202` → `{"job": Job}`; `output.hooks` = 3 alternative opening lines. 0 credits.
+**B9. `POST /projects/:id/hooks`** (P1): Verified. `202` → `{"job": Job}`; `output.hooks` = up to 3 alternative opening lines. 0 credits. `409 no_script` when the project has no scenes yet.
 
 **B10. `GET /projects/:id/estimate`**: User. Credits needed to generate everything missing or outdated.
 ```json
@@ -237,9 +245,11 @@ URLs to media are presigned and valid for 2 hours.
 
 **C3. `DELETE /scenes/:id`**: User. `204`. Remaining scenes are renumbered.
 
-**C4. `POST /scenes/:id/duplicate`**: User. `201` → `{"scene": Scene}` placed after the original, reusing its assets.
+**C4. `POST /scenes/:id/duplicate`**: User. `201` → `{"scene": Scene, "estimate": Estimate}` placed after the original, reusing its assets.
 
-**C5. `POST /projects/:id/scenes/reorder`**: User. Body: `sceneIds` (every scene id, in the new order). `200` → `{"scenes": [Scene]}`. Error `400` if the list doesn't match the project's scenes.
+**C5. `POST /projects/:id/scenes/reorder`**: User. Body: `sceneIds` (every scene id, in the new order). `200` → `{"scenes": [Scene], "estimate": Estimate}`. Error `400` if the list doesn't match the project's scenes. After C3 (delete) the client fetches B10 for the new estimate.
+
+While the project's script is being written (status `scripting`), C1–C6 answer `409 already_running`: the scenes are about to be replaced.
 
 **C6. `POST /scenes/:id/rewrite`**: Verified. Body: `instructions` (for example "make this punchier", ≤ 200 characters). `202` → `{"job": Job}`; when done the scene's text is updated and its voice marked `outdated`. 1 credit.
 
@@ -316,7 +326,7 @@ The value that is stored and used is the resolved path and query, never the text
 
 ### H. Credits (2)
 
-**H1. `GET /credits`**: User. `200` → `{"balance": 86, "monthlyAllowance": 100, "resetsAt": "…", "costs": {"script": 1, "voicePer30s": 2, "aiImage": 1, "aiVideoClip": 10, "render": 2, "transcribe": 1}}`. The web app shows costs from this, never hard-coded.
+**H1. `GET /credits`**: User. `200` → `{"balance": 86, "monthlyAllowance": 100, "resetsAt": "…", "costs": {"script": 1, "voicePer30s": 2, "aiImage": 1, "aiVideoClip": 10, "render": 2, "transcribe": 1, "ideas": 0, "hooks": 0, "rewrite": 1}}`. The web app shows costs from this, never hard-coded.
 
 **H2. `GET /credits/ledger`**: User. Query: `limit`, `cursor`. `200` → `{"items": [{"id", "amount", "kind", "note", "jobId", "projectId", "createdAt"}], "nextCursor"}`.
 
@@ -370,7 +380,7 @@ Reachable only from the workers' private network; requests carry the shared secr
 | A7 forgot password | 3 per hour per email address typed, and 10 per hour per IP |
 | A2, A8 link tokens | 30 per hour per IP |
 | A11, A12 current-password checks | 5 per minute per user |
-| B1 ideas, B3/B8 scripts, C6 rewrite, F4 caption | 20 per hour per user combined |
+| B1 ideas, B3/B8 scripts, B9 hooks, C6 rewrite, F4 caption | 20 per hour per user combined; only requests that start work count |
 | C9 stock search | 60 per hour per user |
 | D1 uploads | 30 per hour per user |
 | Everything else | 300 per minute per user |

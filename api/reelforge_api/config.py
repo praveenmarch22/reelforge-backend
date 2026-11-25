@@ -65,6 +65,18 @@ class Settings(BaseSettings):
     smtp_password: str = Field(default="", repr=False)
     smtp_starttls: bool = False
 
+    # Language models, tried in this order (technical design 9.0). "mock" is an offline
+    # stand-in for development and tests; production refuses it.
+    llm_providers: str = "gemini,groq"
+    gemini_api_key: str = Field(default="", repr=False)
+    gemini_model: str = "gemini-2.5-flash"
+    groq_api_key: str = Field(default="", repr=False)
+    groq_model: str = "llama-3.3-70b-versatile"
+
+    # How background jobs are started. "celery": sent to the worker. "manual": kept in a list
+    # for tests to run one by one. Empty = manual in the test environment, celery elsewhere.
+    job_dispatch: Literal["celery", "manual"] | None = None
+
     # Credits granted at sign-up and every month (PRD 5.10).
     monthly_credits: int = 100
     monthly_credits_tester: int = 500
@@ -75,6 +87,9 @@ class Settings(BaseSettings):
         # fullmatch, not match: "$" would also accept a value that ends with a line break.
         if not _ORIGIN.fullmatch(self.web_origin):
             raise ValueError("WEB_ORIGIN must be one exact address, for example https://app.example.com")
+        unknown = set(self.llm_provider_names) - {"gemini", "groq", "mock"}
+        if unknown or not self.llm_provider_names:
+            raise ValueError("LLM_PROVIDERS must list gemini, groq or mock, separated by commas")
         if self.env == "production":
             if DEV_DATABASE_LOGIN in self.database_url:
                 raise ValueError("DATABASE_URL must not use the development login in production")
@@ -84,6 +99,8 @@ class Settings(BaseSettings):
                 raise ValueError("SECRET_KEY must be set to a long random value in production")
             if self.s3_secret_key == DEV_S3_SECRET:
                 raise ValueError("S3_SECRET_KEY must not be the development default in production")
+            if "mock" in self.llm_provider_names:
+                raise ValueError("LLM_PROVIDERS must not include the mock in production")
             if self.cookie_secure is False:
                 raise ValueError("COOKIE_SECURE cannot be off in production")
             if self.email_provider != "smtp":
@@ -91,6 +108,14 @@ class Settings(BaseSettings):
             if not self.web_origin.startswith("https://"):
                 raise ValueError("WEB_ORIGIN must be an https address in production")
         return self
+
+    @property
+    def llm_provider_names(self) -> list[str]:
+        return [name.strip() for name in self.llm_providers.split(",") if name.strip()]
+
+    @property
+    def jobs_dispatch(self) -> str:
+        return self.job_dispatch or ("manual" if self.env == "test" else "celery")
 
     @property
     def cookies_secure(self) -> bool:

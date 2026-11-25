@@ -45,8 +45,27 @@ def test_the_background_tasks_and_their_schedule_are_registered(app):
     for name in ("system.ping", "mail.send", "mail.password_reset"):
         assert name in celery.tasks, f"{name} is not registered"
     scheduled = {entry["task"]: entry["options"]["queue"] for entry in celery.conf.beat_schedule.values()}
-    assert scheduled == {"accounts.purge_deleted": "maintenance", "accounts.clean_tokens": "maintenance"}
+    assert scheduled == {
+        "accounts.purge_deleted": "maintenance",
+        "accounts.clean_tokens": "maintenance",
+        "jobs.fail_stuck": "maintenance",
+        "credits.reset_monthly": "maintenance",
+    }
     assert set(scheduled) <= set(celery.tasks)
+    # Language-model jobs run on their own queue (technical design 7).
+    assert "jobs.run" in celery.tasks
+    assert celery.conf.task_routes["jobs.run"] == {"queue": "llm"}
+
+
+def test_the_schedule_matches_the_technical_design(app):
+    """fail_stuck_jobs every 5 minutes, reset_monthly_credits hourly (technical design 7)."""
+    schedules = {
+        entry["task"]: entry["schedule"] for entry in app.extensions["celery"].conf.beat_schedule.values()
+    }
+    assert schedules["jobs.fail_stuck"].minute == set(range(0, 60, 5))
+    assert schedules["jobs.fail_stuck"].hour == set(range(24))
+    assert len(schedules["credits.reset_monthly"].minute) == 1
+    assert schedules["credits.reset_monthly"].hour == set(range(24))
 
 
 # ---------------------------------------------------------------- settings
@@ -63,6 +82,8 @@ PRODUCTION = {
     "smtp_password": "Hn5cRb8yWj3fGt6u",
     "web_origin": "https://app.reelforge.example",
     "cookie_secure": None,
+    # The container's environment says LLM_PROVIDERS=mock, which production refuses.
+    "llm_providers": "gemini,groq",
 }
 SECRETS = ("secret_key", "database_url", "s3_secret_key", "smtp_password")
 
@@ -101,6 +122,9 @@ def test_production_cookies_are_secure_unless_nothing_says_otherwise():
         ({"email_provider": "memory"}, "EMAIL_PROVIDER"),
         ({"web_origin": "http://app.reelforge.example"}, "WEB_ORIGIN"),
         ({"web_origin": "http://localhost:5173"}, "WEB_ORIGIN"),
+        ({"llm_providers": "mock"}, "LLM_PROVIDERS"),
+        ({"llm_providers": "gemini,mock"}, "LLM_PROVIDERS"),
+        ({"llm_providers": " groq , mock "}, "LLM_PROVIDERS"),
     ],
 )
 def test_production_refuses_settings_that_are_only_safe_in_development(unsafe, setting):
@@ -244,6 +268,19 @@ def test_a_refused_production_configuration_does_not_print_its_secrets(monkeypat
     secrets = {**{name: PRODUCTION[name] for name in SECRETS}, "database_url": DATABASE_PASSWORD}
     leaked = [name for name, value in secrets.items() if shows_part_of(shown, value)]
     assert leaked == [], f"the error message shows (part of) {leaked}: {shown}"
+
+
+@pytest.mark.parametrize("env", ["development", "test", "production"])
+@pytest.mark.parametrize("providers", ["openai", "gemini,openai", "", " , "])
+def test_no_environment_accepts_an_unknown_language_model(env, providers):
+    with pytest.raises(ValidationError, match="LLM_PROVIDERS"):
+        Settings(**{**PRODUCTION, "env": env, "llm_providers": providers})
+
+
+@pytest.mark.parametrize("providers", ["mock", "gemini,groq,mock"])
+def test_the_mock_language_model_is_allowed_outside_production(providers):
+    for env in ("development", "test"):
+        assert Settings(**{**PRODUCTION, "env": env, "llm_providers": providers}).llm_provider_names
 
 
 def test_outside_production_cookies_are_not_secure_by_default_so_plain_http_works():

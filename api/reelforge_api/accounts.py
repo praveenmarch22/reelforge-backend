@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from flask import current_app
-from sqlalchemy import select, text, update
+from sqlalchemy import select, update
 
 from .extensions import db
 from .models import AuthToken, CreditAccount, CreditLedger, InstagramAccount, User
@@ -111,10 +111,7 @@ def soft_delete(user: User) -> None:
         .values(used_at=now())
     )
     db.session.query(InstagramAccount).filter_by(user_id=user.id).delete()
-    db.session.execute(
-        text(
-            "UPDATE jobs SET state = 'cancelled', finished_at = now() "
-            "WHERE user_id = :user_id AND state IN ('queued', 'running')"
-        ),
-        {"user_id": user.id},
-    )
+    # Running work is cancelled the normal way: tasks are revoked and their results dropped.
+    from .jobs import cancel_active
+
+    cancel_active(user_id=user.id)

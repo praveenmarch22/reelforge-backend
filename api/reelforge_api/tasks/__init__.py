@@ -1,3 +1,3 @@
 """Background tasks. Importing this package registers every task with Celery."""
 
-from . import accounts, mail, system  # noqa: F401
+from . import accounts, jobs, mail, system  # noqa: F401

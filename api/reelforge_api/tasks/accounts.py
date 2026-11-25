@@ -5,7 +5,7 @@ from celery import shared_task
 from sqlalchemy import delete
 
 from ..extensions import db
-from ..models import AuthToken, RefreshToken, User
+from ..models import AuthToken, Project, RefreshToken, User
 from ..sessions import now
 
 log = logging.getLogger(__name__)
@@ -15,16 +15,18 @@ PURGE_AFTER = timedelta(days=7)
 
 @shared_task(name="accounts.purge_deleted", ignore_result=True)
 def purge_deleted() -> int:
-    """Permanently removes accounts deleted more than 7 days ago (API A12).
+    """Permanently removes accounts and projects deleted more than 7 days ago (API A12, B6).
 
-    Deleting the users row removes everything that belongs to it (the foreign keys cascade).
-    Stored media files are removed with the projects' assets when those exist (milestone B3).
+    Deleting a row removes everything that belongs to it (the foreign keys cascade).
+    Stored files of their assets are removed first once generation exists (milestone B4).
     """
-    result = db.session.execute(delete(User).where(User.deleted_at < now() - PURGE_AFTER))
+    cutoff = now() - PURGE_AFTER
+    projects = db.session.execute(delete(Project).where(Project.deleted_at < cutoff)).rowcount
+    users = db.session.execute(delete(User).where(User.deleted_at < cutoff)).rowcount
     db.session.commit()
-    if result.rowcount:
-        log.info("purged deleted accounts", extra={"count": result.rowcount})
-    return result.rowcount
+    if users or projects:
+        log.info("purged deleted accounts and projects", extra={"accounts": users, "projects": projects})
+    return users
 
 
 @shared_task(name="accounts.clean_tokens", ignore_result=True)

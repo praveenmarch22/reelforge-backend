@@ -238,6 +238,8 @@ def update_project(project_id: str):
         if field in sent:
             setattr(project, field, sent[field])
     if sent.get("voice_id") is not None and sent["voice_id"] != project.voice_id:
+        # A voice still being made in the old voice is stopped and refunded (QB4-001).
+        jobs.cancel_active(project_id=project.id, job_type="voice")
         project.voice_id = sent["voice_id"]
         for scene in project.scenes:
             projects.mark_voice_outdated(scene)

@@ -28,6 +28,7 @@ from .projects_support import (
     set_balance,
     set_statuses,
     start_project,
+    unsigned,
     waiting_jobs,
 )
 from .support import assert_error, assert_invalid
@@ -395,8 +396,8 @@ def test_duplicating_a_scene_places_the_copy_right_after_it(app, database, outbo
     copy = res.get_json()["scene"]
     assert copy["position"] == 3 and copy["id"] not in ids
     original = get_project(me.browser, project["id"])["scenes"][1]
-    assert {k: v for k, v in copy.items() if k not in ("id", "position")} == {
-        k: v for k, v in original.items() if k not in ("id", "position")
+    assert {k: v for k, v in unsigned(copy).items() if k not in ("id", "position")} == {
+        k: v for k, v in unsigned(original).items() if k not in ("id", "position")
     }
     assert copy["voiceStatus"] == "ready", "it reuses the original's voice"
     after = get_project(me.browser, project["id"])

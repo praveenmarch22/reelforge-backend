@@ -43,7 +43,7 @@ Of the 52 creator-facing endpoints, 49 are needed for version 1 (P0) and 3 are P
 | Auth levels in this document | **Public**: no login. **User**: logged in. **Verified**: logged in and email verified. **Admin**: `is_admin`. **Internal**: private network with a shared secret |
 | Slow work | `202 Accepted` with job ids; the client polls `GET /jobs/:id` or `GET /projects/:id` every 2 s |
 | Pagination | `?limit=20&cursor=…` (max 100). Response: `{"items": [...], "nextCursor": "…" or null}` |
-| Idempotency | `Idempotency-Key` header accepted on endpoints marked **idempotent**. Same key + same body → the first response again; same key + different body → `409 idempotency_conflict`. Keys last 24 h |
+| Idempotency | `Idempotency-Key` header (up to 100 letters, digits, `-`, `_`, `:` or `.`) accepted on endpoints marked **idempotent**. Same key + same body → the first response again; same key + different body → `409 idempotency_conflict`; the same key sent again while the first request is still being handled → `409 already_running`. Only successful responses are kept, for 24 h, so a refused request can be retried with its key |
 | Validation | Pydantic; unknown fields are rejected with `400 validation_error` |
 | Rate limits | `429 rate_limited` with `Retry-After` (seconds) and the same number in `details.retryAfterSeconds` |
 | Ownership | Anything belonging to another user returns `404 not_found` (never `403`), so ids can't be probed |
@@ -82,6 +82,7 @@ Of the 52 creator-facing endpoints, 49 are needed for version 1 (P0) and 3 are P
 | 409 | `instagram_not_connected` | |
 | 409 | `instagram_reconnect_required` | Token expired or revoked |
 | 409 | `idempotency_conflict` | Key reused with a different body |
+| 409 | `words_edited` | A new voice for a scene whose caption words were fixed by hand, without `"confirmReplaceWords": true` (CA-4) |
 | 410 | `token_invalid` | Verification or reset link expired or used |
 | 413 | `file_too_large` | An upload over its size limit |
 | 413 | `payload_too_large` | A request body over 1 MB (uploads go straight to storage, never through the API) |
@@ -129,7 +130,7 @@ These appear in many responses.
  "trimStart": 0, "trimEnd": null, "lastError": null, "estimatedSeconds": 3.2}
 ```
 
-`estimatedSeconds` is the spoken length estimated from the narration (2.5 words per second, PRD S4); the real length comes from the voiceover. `voice` and `visual` are null until generated.
+`estimatedSeconds` is the spoken length estimated from the narration (2.5 words per second, PRD S4); the real length comes from the voiceover. `voice` and `visual` are null until generated. Their `url` is a link to the file in storage, valid for 2 hours and different on every response (key media by `assetId`); fetch the project again for fresh links. `voice` also has `provider` (`elevenlabs` or `edge`), `voiceId` and `estimatedTimings` (true when the caption timings were spread evenly and are only roughly in sync). `words` are the voiceover's word timings in seconds (empty until the first voice).
 
 **Job**
 ```json
@@ -138,7 +139,7 @@ These appear in many responses.
  "error": null, "output": null, "queuedAt": "…", "finishedAt": null}
 ```
 
-When `state` is `failed`, `error` is `{"code", "message"}`; the message is plain language for the creator. Codes: `content_refused` (the AI's content rules refused it; edit the text), `provider_unavailable` (no AI service available right now), `provider_failed` (the AI service did not answer usefully after retries and fallbacks), `scene_changed` (a rewrite whose scene was edited or deleted meanwhile), `timed_out` (stopped after its time limit), `queue_unavailable` (could not be started), `internal_error`. Credits are refunded for every failure (`creditsRefunded: true`). Jobs of a deleted scene are kept with `sceneId: null`.
+When `state` is `failed`, `error` is `{"code", "message"}`; the message is plain language for the creator. Codes: `content_refused` (the AI's content rules refused it; edit the text), `provider_unavailable` (no AI service available right now), `provider_failed` (the AI service did not answer usefully after retries and fallbacks), `scene_changed` (a rewrite or voice whose scene was edited or deleted meanwhile; the voice then shows `outdated`, or `missing` if the scene never had one), `timed_out` (stopped after its time limit), `queue_unavailable` (could not be started), `internal_error`. Credits are refunded for every failure (`creditsRefunded: true`). Jobs of a deleted scene are kept with `sceneId: null`.
 
 **Render**
 ```json
@@ -223,14 +224,15 @@ URLs to media are presigned and valid for 2 hours.
 
 **B10. `GET /projects/:id/estimate`**: User. Credits needed to generate everything missing or outdated.
 ```json
-{"credits": 14, "balance": 86,
- "items": [{"type": "voice", "count": 6, "credits": 12}, {"type": "ai_image", "count": 2, "credits": 2},
+{"credits": 6, "balance": 86,
+ "items": [{"type": "voice", "count": 6, "credits": 4}, {"type": "ai_image", "count": 2, "credits": 2},
            {"type": "visual", "count": 4, "credits": 0}, {"type": "music", "count": 1, "credits": 0}]}
 ```
+The voice item is priced on the total length of the voices needed (here about 45 s: 2 per started 30 s), not per scene.
 
 **B11. `POST /projects/:id/generate`**: Verified, **idempotent**. Generates all missing or outdated voices, visuals and music.
 - Body: optional `sceneIds` (limit to these scenes).
-- `202` → `{"jobs": [Job], "creditsReserved": 14, "balance": 72}`.
+- `202` → `{"jobs": [Job], "creditsReserved": 6, "balance": 80}`.
 - Errors: `402 insufficient_credits` (nothing started), `409 already_running` (everything already in progress), `503 provider_unavailable`.
 
 **B12. `GET /projects/:id/timeline`**: User. The timeline for the Remotion Player, with presigned URLs. `200` → `{"timelineVersion": 4, "timeline": {…}}` (shape in [PIPELINE_STRATEGY.md](PIPELINE_STRATEGY.md)). Scenes not ready yet have empty `src` and show a placeholder.
@@ -253,7 +255,12 @@ While the project's script is being written (status `scripting`), C1–C6 answer
 
 **C6. `POST /scenes/:id/rewrite`**: Verified. Body: `instructions` (for example "make this punchier", ≤ 200 characters). `202` → `{"job": Job}`; when done the scene's text is updated and its voice marked `outdated`. 1 credit.
 
-**C7. `POST /scenes/:id/voice/regenerate`**: Verified, **idempotent**. Body: optional `voiceId` (this scene only). `202` → `{"job": Job}`. 2 credits per started 30 s. If `wordsEdited` is true, body must include `"confirmReplaceWords": true` (CA-4).
+**C7. `POST /scenes/:id/voice/regenerate`**: Verified, **idempotent**. Body (optional): `voiceId` (one of D3; used for this scene's new voice only, the project's voice is unchanged), `confirmReplaceWords`. `202` → `{"job": Job}`. 1 credit for a scene up to 15 s, else 2 per started 30 s (the length is estimated at 2.5 words per second). Generate (B11) instead charges 2 per started 30 s of all the voices it makes together, so short scenes are not each rounded up. Always makes a new take, even if nothing changed.
+- The voice comes from the request's `voiceId`, else the project's, else the account default, else the first voice in D3. ElevenLabs is tried first; when it fails or its monthly allowance is used up, the matching free Edge voice is used (the job's `provider` says which).
+- While the job runs, the scene's `voiceStatus` is `queued`, then `running`; then `ready` with `voice` and `words` filled, or `failed` with `lastError`. Cancelling it puts the status back.
+- Editing the scene's narration or mood (C2), or the project's voice (B5), while a voice is being made cancels that job and refunds it; the scene then shows `outdated` (or `missing` if it never had a voice). Fixing caption words (C2 `words`) while the voice is being made is refused with `409 already_running`.
+- A failed or cancelled voice keeps the scene's earlier voice file, if any. A `ready` project goes back to `draft` when a voice fails; it stays `ready` while a new take is being made.
+- Errors: `409 words_edited` if `wordsEdited` is true and `confirmReplaceWords` is not (CA-4; the new voice replaces the hand-fixed words), `409 already_running` (the scene's voice is already being made, or the script is being written), `402 insufficient_credits`, `503 provider_unavailable`.
 
 **C8. `POST /scenes/:id/visual/regenerate`**: Verified, **idempotent**. Body: optional `visualSource`, `visualPrompt`, `stockQuery`. Forces a new result even if inputs are unchanged (new seed or next stock result). `202` → `{"job": Job}`. Cost depends on source (0 stock, 1 AI image, 10 AI clip).
 
@@ -274,7 +281,7 @@ While the project's script is being written (status `scripting`), C1–C6 answer
 - For `purpose: voiceover`: also starts a `transcribe` job (Groq Whisper) and returns `{"asset", "job"}` (`202`). 1 credit.
 - Errors: `422 upload_invalid` (corrupt, silent, voiceover over 90 s).
 
-**D3. `GET /voices`**: User. `200` → `{"items": [{"id", "name", "provider": "elevenlabs", "gender", "accent", "style", "previewUrl"}]}`. A curated list, cached.
+**D3. `GET /voices`**: User. `200` → `{"items": [{"id", "name", "provider": "elevenlabs", "gender", "accent", "style", "previewUrl"}]}`. A curated list of 8 voices, the first being the default. `previewUrl` is ElevenLabs' public sample clip (asked for once a day); it is `""` when ElevenLabs can't be reached. `voiceId` values elsewhere (A10 defaults, B3, B5, C7) must be one of these ids or `""` (the default voice).
 
 **D4. `GET /music`**: User. Query: `mood`. `200` → `{"items": [{"id", "title", "durationSeconds", "moods", "license", "previewUrl"}]}`.
 
@@ -326,7 +333,7 @@ The value that is stored and used is the resolved path and query, never the text
 
 ### H. Credits (2)
 
-**H1. `GET /credits`**: User. `200` → `{"balance": 86, "monthlyAllowance": 100, "resetsAt": "…", "costs": {"script": 1, "voicePer30s": 2, "aiImage": 1, "aiVideoClip": 10, "render": 2, "transcribe": 1, "ideas": 0, "hooks": 0, "rewrite": 1}}`. The web app shows costs from this, never hard-coded.
+**H1. `GET /credits`**: User. `200` → `{"balance": 86, "monthlyAllowance": 100, "resetsAt": "…", "costs": {"script": 1, "voicePer30s": 2, "voiceSceneShort": 1, "aiImage": 1, "aiVideoClip": 10, "render": 2, "transcribe": 1, "ideas": 0, "hooks": 0, "rewrite": 1}}`. The web app shows costs from this, never hard-coded.
 
 **H2. `GET /credits/ledger`**: User. Query: `limit`, `cursor`. `200` → `{"items": [{"id", "amount", "kind", "note", "jobId", "projectId", "createdAt"}], "nextCursor"}`.
 

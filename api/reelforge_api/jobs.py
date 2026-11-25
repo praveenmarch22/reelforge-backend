@@ -27,16 +27,22 @@ from sqlalchemy.exc import IntegrityError
 from . import credits
 from .errors import ApiError
 from .extensions import db
-from .models import Job
+from .models import Job, Project
 from .providers.base import AllProvidersFailed, ProviderError
 from .sessions import now
 
 log = logging.getLogger(__name__)
 
 ACTIVE = ("queued", "running")
-QUEUES = {"ideas": "llm", "script": "llm", "rewrite_scene": "llm", "hooks": "llm", "caption": "llm"}
+QUEUES = {
+    "ideas": "llm", "script": "llm", "rewrite_scene": "llm", "hooks": "llm", "caption": "llm",
+    "voice": "voice",
+}  # fmt: skip
 # A job running longer than this is treated as stuck and failed (task design rule 3).
-TIME_LIMITS = {"llm": timedelta(minutes=5)}
+TIME_LIMITS = {"llm": timedelta(minutes=5), "voice": timedelta(minutes=7)}
+# Celery's (soft, hard) limits in seconds per queue. A voice job may try ElevenLabs three
+# times and then Edge three times, with waits for rate limits, before it gives up.
+TASK_LIMITS = {"llm": (240, 300), "voice": (360, 420)}
 # A job still queued after this long means no worker is taking it.
 QUEUED_LIMIT = timedelta(minutes=30)
 
@@ -131,7 +137,11 @@ def dispatch(jobs: list[Job]) -> None:
         from .tasks.jobs import run_job
 
         try:
-            result = run_job.apply_async(args=[str(job.id)], queue=QUEUES.get(job.type, "default"))
+            queue = QUEUES.get(job.type, "default")
+            soft, hard = TASK_LIMITS.get(queue, TASK_LIMITS["llm"])
+            result = run_job.apply_async(
+                args=[str(job.id)], queue=queue, soft_time_limit=soft, time_limit=hard
+            )
         except Exception:  # noqa: BLE001 - the queue (Redis) is unreachable
             log.exception("could not queue job", extra={"job_id": str(job.id), "type": job.type})
             fail(job.id, JobFailed("queue_unavailable"))
@@ -156,6 +166,13 @@ def run_manual_queue() -> int:
 
 
 def _lock(job_id) -> Job | None:
+    """Locks the job's project first, then the job: the same order web requests use (they
+    lock the project, then its scenes and jobs), so the two can never deadlock (QB4-009)."""
+    project_id = db.session.execute(select(Job.project_id).where(Job.id == job_id)).scalar_one_or_none()
+    if project_id is not None:
+        db.session.execute(
+            select(Project.id).where(Project.id == project_id).with_for_update()
+        ).scalar_one_or_none()
     # populate_existing: a job already in memory must be re-read after the lock, or a cancel
     # made by another request in the meantime would go unseen (QB3-002).
     return db.session.execute(
@@ -174,8 +191,10 @@ def run(job_id: str) -> None:
         return
     job.state, job.started_at, job.progress = "running", now(), 10
     job.attempts += 1
-    db.session.commit()
     kind = TYPES[job.type]
+    if hasattr(kind, "on_start"):
+        kind.on_start(job)
+    db.session.commit()
 
     try:
         result, provider = kind.work(job)
@@ -194,25 +213,46 @@ def run(job_id: str) -> None:
         fail(job_id, JobFailed("internal_error"))
         return
 
-    job = _lock(job_id)
+    try:
+        job = _lock(job_id)
+    except Exception:  # noqa: BLE001 - for example a deadlock victim: never leave it running
+        log.exception("could not lock a finished job", extra={"job_id": str(job_id)})
+        db.session.rollback()
+        _discard(kind, None, result)
+        fail(job_id, JobFailed("internal_error"))
+        return
     if job is None or job.state != "running":
         db.session.rollback()  # cancelled while the provider was working: the result is dropped
+        _discard(kind, job, result)
         return
     try:
         output = kind.apply(job, result)
     except JobFailed as e:
         db.session.rollback()
+        _discard(kind, job, result)
         fail(job_id, e)
         return
     except Exception:  # noqa: BLE001 - never leave a job running because saving failed
         log.exception("saving a job's result failed", extra={"job_id": str(job_id), "type": job.type})
         db.session.rollback()
+        _discard(kind, job, result)
         fail(job_id, JobFailed("internal_error"))
         return
     job.state, job.progress, job.finished_at = "succeeded", 100, now()
     job.provider, job.output = provider, output
     db.session.commit()
     record_usage(job.type, provider, failed=False, credits_charged=job.credits_reserved)
+
+
+def lock(job_id) -> Job | None:
+    """Locks a job, and its project first (see _lock). For requests that change a job."""
+    return _lock(job_id)
+
+
+def _discard(kind, job: Job | None, result) -> None:
+    """Removes what a job made but didn't keep (for example a stored file)."""
+    if hasattr(kind, "discard"):
+        kind.discard(job, result)
 
 
 def _provider_failure(e: ProviderError) -> JobFailed:
@@ -267,8 +307,9 @@ def cancel(job: Job) -> None:
             log.warning("could not revoke task", extra={"job_id": str(job.id)}, exc_info=True)
 
 
-def cancel_active(*, project_id=None, scene_ids=None, user_id=None) -> None:
-    """Cancels and refunds every active job of a project or of some scenes. Caller commits."""
+def cancel_active(*, project_id=None, scene_ids=None, user_id=None, job_type=None) -> None:
+    """Cancels and refunds every active job of a project or of some scenes (optionally of
+    one type). Caller commits."""
     query = (
         select(Job).where(Job.state.in_(ACTIVE)).with_for_update().execution_options(populate_existing=True)
     )
@@ -278,6 +319,8 @@ def cancel_active(*, project_id=None, scene_ids=None, user_id=None) -> None:
         query = query.where(Job.scene_id.in_(list(scene_ids)))
     if user_id is not None:
         query = query.where(Job.user_id == user_id)
+    if job_type is not None:
+        query = query.where(Job.type == job_type)
     for job in db.session.execute(query).scalars():
         cancel(job)
 

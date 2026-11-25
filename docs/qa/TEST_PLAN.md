@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | Owner | QA |
-| Last updated | 2026-11-24 |
-| Covers so far | Frontend milestones F1, F2, F3, F4; backend milestone B1 |
+| Last updated | 2026-11-25 |
+| Covers so far | Frontend milestones F1, F2, F3, F4; backend milestones B1, B2, B3, B4 slice 1 |
 | Related | [PRD](../PRD.md), [API design](../API_DESIGN.md), [UI review](../UI_REVIEW.md), [Stitch prompts](../STITCH_PROMPTS.md), [Milestones](../../MILESTONES.md), [Status](../../PROJECT_STATUS.md) |
 
 This plan is kept current as milestones are added. Test cases and reports are per milestone group: `TEST_CASES_<milestones>.md`, `QA_REPORT_<milestones>.md`.
@@ -20,6 +20,7 @@ This plan is kept current as milestones are added. Test cases and reports are pe
 | F3 | App shell (sidebar, account menu, credits and Instagram pills), dashboard (with empty state), projects library (search, filters, delete) |
 | F4 | Onboarding: the gate that sends a new verified user there once, the niche, voice and Instagram steps, every way of skipping, what reaches the profile, the Instagram round trip (API F1, F2) through the mock stand-in page, and the F1-F3 flows again with the gate in place |
 | B1 | Backend foundations, against the technical design, API design sections 2 and J, and the schema: health check, error format, request ids and logs, CORS, settings and production checks, baseline migration equals `schema.sql`, worker and queues, storage wrapper, Compose file, image, CI workflow, README. Method: `curl` against the running Compose stack, the suite inside the `api` container, and short Python probes run in the container from a `git archive` copy of the commit under review. Nothing is stopped; a dependency being down is simulated with a throwaway app pointed at a dead address. No browser. See [QA_REPORT_B1.md](QA_REPORT_B1.md) |
+| B4 slice 1 | Voiceovers: API C7, D3, the voice job and queue, ElevenLabs/Edge fallback, word timings, mood delivery, `Idempotency-Key`. Method: a script run inside the `api` container drives the real app through its test client against an isolated database (`reelforge_qa_test`), Redis database 14 and bucket `reelforge-qa` (all removed afterwards), mock voice provider only; "while running" is simulated by calling the API from inside the job's work step; provider classes are exercised with `requests`/`edge_tts` stubbed. Real ElevenLabs and Edge are never called (free quota). See [QA_REPORT_B4_S1.md](QA_REPORT_B4_S1.md) |
 
 **Out of scope until built**: New Reel and script editor (F5), Reel editor (F6), render and publish (F7), settings, credits history and admin (F8). These routes show a "not built yet" placeholder on purpose. The frontend runs against the mock API; backend features (B2 onwards) are not built.
 

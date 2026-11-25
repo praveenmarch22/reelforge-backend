@@ -1,4 +1,5 @@
-"""What each kind of job does: ideas, script, scene rewrite and hooks (milestone B3).
+"""What each kind of job does: ideas, script, scene rewrite and hooks (milestone B3); the
+generation jobs (B4) are in `generation.py`.
 
 Every type has three steps, called by jobs.run():
   work(job)            the slow part (a language-model call), with no database lock held;
@@ -366,6 +367,9 @@ class RewriteScene:
             raise JobFailed("scene_changed")
         if scene.narration != job.input["narration"] or scene.on_screen_text != job.input["onScreenText"]:
             raise JobFailed("scene_changed")
+        if scene.narration != rewrite["narration"] and scene.voice_status in ("queued", "running"):
+            # A voice being made for the old words would be thrown away: stop and refund it.
+            cancel_active(scene_ids=[scene.id], job_type="voice")
         scene.narration = rewrite["narration"]
         scene.on_screen_text = rewrite["on_screen_text"]
         mark_voice_outdated(scene)
@@ -395,4 +399,6 @@ class Hooks:
         pass
 
 
-TYPES = {"ideas": Ideas, "script": Script, "rewrite_scene": RewriteScene, "hooks": Hooks}
+from .generation import VoiceJob  # noqa: E402 - generation imports this module's neighbours
+
+TYPES = {"ideas": Ideas, "script": Script, "rewrite_scene": RewriteScene, "hooks": Hooks, "voice": VoiceJob}

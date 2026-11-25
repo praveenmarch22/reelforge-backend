@@ -152,6 +152,14 @@ class RewriteBody(Body):
     instructions: Annotated[str, _line(INSTRUCTIONS_MAX, required=True)]
 
 
+class VoiceRegenerateBody(Body):
+    """C7. `voiceId` applies to this scene's new voice only; `confirmReplaceWords` is needed
+    when the creator fixed caption words by hand (CA-4)."""
+
+    voice_id: Annotated[str, AfterValidator(_voice_id)] | None = None
+    confirm_replace_words: bool = False
+
+
 class SceneFields(Body):
     on_screen_text: Annotated[str, _line(ON_SCREEN_TEXT_MAX)] | None = None
     visual_prompt: Annotated[str, _line(PROMPT_MAX)] | None = None

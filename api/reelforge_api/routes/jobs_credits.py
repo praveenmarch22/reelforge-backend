@@ -78,8 +78,9 @@ def project_jobs(project_id: str):
 @require_user()
 def cancel_job(job_id: str):
     """G3. Stops a queued or running job and refunds its credits."""
-    job = _get_job(job_id, lock=True)
-    if job.state not in jobs.ACTIVE:
+    # The project is locked before the job, the order the worker uses (QB4-015).
+    job = jobs.lock(_get_job(job_id).id)
+    if job is None or job.state not in jobs.ACTIVE:
         raise ApiError(409, "job_finished", "This has already finished.")
     jobs.cancel(job)
     db.session.commit()

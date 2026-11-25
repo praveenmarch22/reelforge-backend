@@ -88,6 +88,8 @@ def make_settings(**overrides) -> Settings:
         "llm_providers": "mock",
         "gemini_api_key": "",
         "groq_api_key": "",
+        "voice_providers": "mock",
+        "elevenlabs_api_key": "",
     }
     values.update(overrides)
     return Settings(**values)

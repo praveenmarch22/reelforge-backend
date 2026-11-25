@@ -1,7 +1,6 @@
 """Scenes (API design group C: C1 to C6).
 
-C7 to C10 (voice and visual regeneration, stock search, choosing a visual) belong to the
-generation milestone (B4).
+C7 (a scene's voice) is milestone B4 slice 1; C8 to C10 (visuals) come in slice 2.
 """
 
 from __future__ import annotations
@@ -9,12 +8,20 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, make_response
 from sqlalchemy import select
 
-from .. import jobs, projects
+from .. import generation, jobs, projects
 from ..auth import current_user, require_user
 from ..errors import ApiError
 from ..extensions import db
+from ..idempotency import idempotent
 from ..models import Scene
-from ..project_schemas import CreateSceneBody, ReorderBody, RewriteBody, UpdateSceneBody, present
+from ..project_schemas import (
+    CreateSceneBody,
+    ReorderBody,
+    RewriteBody,
+    UpdateSceneBody,
+    VoiceRegenerateBody,
+    present,
+)
 from ..schemas import read_body
 from ..script_rules import SCENES_MAX, default_visual_source
 from .projects import refuse_while_scripting, start_llm_job
@@ -82,6 +89,13 @@ def update_scene(scene_id: str):
     for field in sent:
         if sent[field] is None and field != "trim_end":
             raise _bad(_camel(field), "Required")
+    voice_busy = scene.voice_status in ("queued", "running")
+    if "words" in sent and voice_busy:
+        # The new voice would replace the fixed words as soon as it is ready (QB4-004).
+        raise ApiError(409, "already_running", generation.VOICE_BUSY)
+    if voice_busy and any(f in sent and sent[f] != getattr(scene, f) for f in ("narration", "mood")):
+        # The voice being made is for the old text: stop it now and refund it (QB4-005).
+        jobs.cancel_active(scene_ids=[scene.id], job_type="voice")
 
     for field, outdates in (
         ("narration", projects.mark_voice_outdated),
@@ -201,6 +215,23 @@ def rewrite_scene(scene_id: str):
             "instructions": body.instructions,
         },
     )
+    db.session.commit()
+    answer = jsonify(job=jobs.job_json(job, False))
+    jobs.dispatch([job])
+    return answer, 202
+
+
+@bp.post("/scenes/<scene_id>/voice/regenerate")
+@require_user(verified=True)
+@idempotent
+def regenerate_voice(scene_id: str):
+    """C7. A new voiceover for this scene. 2 credits per started 30 seconds of narration."""
+    body = read_body(VoiceRegenerateBody, allow_empty=True)
+    scene, project = projects.get_scene(current_user().id, scene_id, lock=True)
+    refuse_while_scripting(project)
+    if scene.words_edited and not body.confirm_replace_words:
+        raise ApiError(409, "words_edited", generation.WORDS_EDITED)
+    job = generation.start_voice_job(project, scene, body.voice_id or "")
     db.session.commit()
     answer = jsonify(job=jobs.job_json(job, False))
     jobs.dispatch([job])

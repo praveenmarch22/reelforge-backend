@@ -553,7 +553,7 @@ The database stores what the creator edits; the timeline is built from it.
 | narration | "Most people never notice it, but it changes everything." |
 | mood | `calm` |
 | visual_source | `stock` |
-| voice_asset_id → assets | `voice`, 3.6 s, `users/…/voice/s2-9f1c….mp3` |
+| voice_asset_id → assets | `voice`, 3.6 s, `users/…/projects/…/voice/<job>.mp3` |
 | visual_asset_id → assets | `video_clip`, 7.0 s, `users/…/visual/s2-a41b….mp4` |
 | words | `[{"text": "Most", "start": 0.05, "end": 0.31}, …]` |
 
@@ -709,8 +709,8 @@ Changing narration or mood marks the voice `outdated`; the response says what re
 ```http
 GET /api/v1/projects/6f1c…/estimate
 200 OK
-{"credits": 14, "balance": 86,
- "items": [{"type": "voice", "count": 6, "credits": 12}, {"type": "visual", "count": 6, "credits": 0},
+{"credits": 4, "balance": 86,
+ "items": [{"type": "voice", "count": 6, "credits": 4}, {"type": "visual", "count": 6, "credits": 0},
            {"type": "music", "count": 1, "credits": 0}, {"type": "ai_image_fallback", "maxCredits": 2}]}
 ```
 
@@ -718,7 +718,7 @@ GET /api/v1/projects/6f1c…/estimate
 POST /api/v1/projects/6f1c…/generate
 Idempotency-Key: 0c4f…
 202 Accepted
-{"jobs": [{"id": "…", "type": "voice", "sceneId": "…"}, …], "creditsReserved": 14, "balance": 72}
+{"jobs": [{"id": "…", "type": "voice", "sceneId": "…"}, …], "creditsReserved": 4, "balance": 82}
 ```
 
 **Upload a file (presigned)**
@@ -933,7 +933,7 @@ scripting ──script ready──► draft ──generate──► generating �
 ### Task design rules
 1. **Idempotent**: a task first checks if its output already exists (same `input_hash`); if so it links the existing asset and returns.
 2. **Retries**: provider calls use the prototype's `with_retry` and `with_fallback`. Celery-level retry only for infrastructure failures (database, S3).
-3. **Time limits**: soft and hard limits per queue (for example voice 2 minutes, AI video 12 minutes, render 10 minutes).
+3. **Time limits**: soft and hard limits per queue (language models 4 minutes soft / 5 hard, voice 6 / 7 so ElevenLabs and then Edge both get their tries; AI video 12 minutes, render 10 minutes).
 4. **Cancellation**: deleting a project or scene marks its jobs `cancelled`; tasks check this before saving output.
 5. **Credits**: reserved when the job is created, refunded automatically on failure or cancellation.
 
@@ -969,7 +969,7 @@ All providers sit behind the interfaces in `packages/core/providers` (from the p
 | Purpose | Primary | Fallback | Free tier | Worker queue | Settings (`.env`) |
 |---|---|---|---|---|---|
 | Ideas, scripts, scene rewrites, post captions and hashtags | **Google Gemini API** (`gemini-3.5-flash`) | Groq (`openai/gpt-oss-120b`) | Yes, both | `llm` | `GEMINI_API_KEY`, `GEMINI_MODEL`, `GROQ_API_KEY` |
-| Voiceover with word timings and emotion | **ElevenLabs** (text-to-speech with timestamps) | Edge TTS (no key) | ElevenLabs about 10 min/month, non-commercial | `voice` | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL` |
+| Voiceover with word timings and emotion | **ElevenLabs** (text-to-speech with timestamps) | Edge TTS (no key) | ElevenLabs about 10 min/month, non-commercial | `voice` | `VOICE_PROVIDERS`, `ELEVENLABS_API_KEY`, `ELEVENLABS_MODEL` (the voice is chosen per project from API D3) |
 | Speech to text: captions for uploaded voiceovers, and backup when voice timings are missing | **Groq Whisper API** (`whisper-large-v3-turbo`) | Estimated word timings (captions only roughly in sync), with a warning | Yes | `voice` | `GROQ_API_KEY`, `WHISPER_MODEL` |
 | Stock video for faceless scenes | **Pexels API** | Pixabay API, then an AI image | Yes, both | `visuals` | `PEXELS_API_KEY`, `PIXABAY_API_KEY` |
 | AI images (faceless fallback, Full AI keyframes) | **Cloudflare Workers AI** (FLUX.1 schnell) | Hugging Face Inference | Daily free allowance | `visuals` | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` |
@@ -989,7 +989,12 @@ Every AI provider also has an offline **mock** (from the prototype) used in loca
 
 ### Voice (ElevenLabs, fallback Edge TTS)
 - `text-to-speech/{voice}/with-timestamps` gives audio plus character timings, converted to word timings.
-- Mood → voice settings, or emotion tags with the v3 model.
+- Mood → voice settings, or emotion tags with the v3 model. The model is `ELEVENLABS_MODEL` (default `eleven_multilingual_v2`).
+- Creators pick from a curated list of 8 ElevenLabs ready-made voices (`voices.py`, API D3). Each has a matching Edge voice (same gender and accent), so when ElevenLabs fails or the free monthly characters run out (a `401 quota_exceeded`), the Edge voice takes over and the Reel still gets the same kind of voice. `VOICE_PROVIDERS` sets the order; the admin kill switch can turn either off.
+- Audio is kept in memory and stored at `users/{user}/projects/{project}/voice/{job}.mp3`; a job that is dropped (cancelled, or its scene edited meanwhile) deletes its file. The asset keeps the provider, the voice, the model and a hash of narration, mood and voice (for slice 3's reuse).
+- Until Whisper arrives (milestone B7), audio without usable timings gets evenly spread word timings and `meta.estimatedTimings: true`.
+- Caption words take their text from the narration as written (when the word counts match), so punctuation looks the same whichever provider spoke it; only the timings come from the provider.
+- A voice being made in the old text or voice is cancelled and refunded as soon as the scene's narration or mood, or the project's voice, changes.
 - Missing timings → transcribe with the Groq Whisper API (G-15). Uploaded voiceovers are transcribed the same way, requesting word-level timestamps. Files over the API's upload size limit are compressed to mono MP3 first (a 90-second voiceover is well under any limit).
 
 ### Stock (Pexels), images (Cloudflare FLUX), video (Hugging Face Space)
@@ -1050,7 +1055,7 @@ The Graph API version is a setting, so it can be updated without code changes.
 ```
 s3://reelforge-media-<env>/
   users/<user_id>/projects/<project_id>/
-      voice/<scene_id>-<hash>.mp3
+      voice/<job_id>.mp3            (one file per voice job; the asset row keeps the input hash)
       visual/<scene_id>-<hash>.(mp4|jpg)
       keyframe/<scene_id>-<hash>.jpg
       music/<hash>.mp3
@@ -1058,7 +1063,7 @@ s3://reelforge-media-<env>/
       renders/<render_id>.mp4
       thumbnails/<render_id>.jpg
   library/music/<track>.mp3
-  library/voices/<voice_id>-preview.mp3
+  library/voices/<voice_id>-preview.mp3   (not used yet: D3 serves ElevenLabs' own sample links)
 ```
 
 A lifecycle rule moves renders older than 90 days to cheaper storage.

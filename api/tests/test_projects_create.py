@@ -106,11 +106,11 @@ def test_creating_a_project_reserves_a_credit_and_writes_the_script(app, databas
 def test_defaults_come_from_the_profile_and_the_settings(app, outbox):
     me = creator(app)
     res = me.browser.patch(
-        "/me", {"defaults": {"voiceId": "voice-42", "captionStyle": "neon", "mode": "full_ai"}}
+        "/me", {"defaults": {"voiceId": "Xb7hH8MSUJpSbSDYk0k2", "captionStyle": "neon", "mode": "full_ai"}}
     )
     assert res.status_code == 200, res.get_data(as_text=True)
     project, _ = start_project(me.browser)
-    assert project["voiceId"] == "voice-42"
+    assert project["voiceId"] == "Xb7hH8MSUJpSbSDYk0k2"
     assert project["mode"] == "full_ai"
     assert project["settings"]["captionStyle"] == "neon"
     assert project["tone"] == "educational" and project["targetSeconds"] == 30

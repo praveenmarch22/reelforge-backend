@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     groq_api_key: str = Field(default="", repr=False)
     groq_model: str = "openai/gpt-oss-120b"
 
+    # Voiceover providers, tried in this order (technical design 9.0). Edge TTS needs no key.
+    voice_providers: str = "elevenlabs,edge"
+    elevenlabs_api_key: str = Field(default="", repr=False)
+    elevenlabs_model: str = "eleven_multilingual_v2"
+
     # How background jobs are started. "celery": sent to the worker. "manual": kept in a list
     # for tests to run one by one. Empty = manual in the test environment, celery elsewhere.
     job_dispatch: Literal["celery", "manual"] | None = None
@@ -90,6 +95,9 @@ class Settings(BaseSettings):
         unknown = set(self.llm_provider_names) - {"gemini", "groq", "mock"}
         if unknown or not self.llm_provider_names:
             raise ValueError("LLM_PROVIDERS must list gemini, groq or mock, separated by commas")
+        unknown = set(self.voice_provider_names) - {"elevenlabs", "edge", "mock"}
+        if unknown or not self.voice_provider_names:
+            raise ValueError("VOICE_PROVIDERS must list elevenlabs, edge or mock, separated by commas")
         if self.env == "production":
             if DEV_DATABASE_LOGIN in self.database_url:
                 raise ValueError("DATABASE_URL must not use the development login in production")
@@ -101,6 +109,8 @@ class Settings(BaseSettings):
                 raise ValueError("S3_SECRET_KEY must not be the development default in production")
             if "mock" in self.llm_provider_names:
                 raise ValueError("LLM_PROVIDERS must not include the mock in production")
+            if "mock" in self.voice_provider_names:
+                raise ValueError("VOICE_PROVIDERS must not include the mock in production")
             if self.cookie_secure is False:
                 raise ValueError("COOKIE_SECURE cannot be off in production")
             if self.email_provider != "smtp":
@@ -112,6 +122,10 @@ class Settings(BaseSettings):
     @property
     def llm_provider_names(self) -> list[str]:
         return [name.strip() for name in self.llm_providers.split(",") if name.strip()]
+
+    @property
+    def voice_provider_names(self) -> list[str]:
+        return [name.strip() for name in self.voice_providers.split(",") if name.strip()]
 
     @property
     def jobs_dispatch(self) -> str:

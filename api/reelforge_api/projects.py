@@ -12,6 +12,7 @@ from .errors import ApiError
 from .extensions import db
 from .models import Asset, CreditAccount, Job, Project, Scene
 from .script_rules import estimated_seconds, visual_credits, voice_credits, word_count
+from .storage import get_storage
 
 NOT_FOUND = "We couldn't find that."
 # Statuses a project has once its scenes have been generated at least once.
@@ -95,10 +96,29 @@ def after_edit(project: Project, *, force: bool = False) -> None:
     project.updated_at = func.now()
     if project.status in ("scripting", "generating", "rendering", "posting"):
         return
-    if project.status not in _GENERATED and not force:
-        return
     scenes = project.scenes
-    complete = bool(scenes) and all(s.voice_status == "ready" and s.visual_status == "ready" for s in scenes)
+    # A draft counts as generated once any scene has a file: it can become ready again
+    # after a voice that failed is redone (QB4-014).
+    generated = project.status in _GENERATED or any(s.voice_asset_id or s.visual_asset_id for s in scenes)
+    if not generated and not force:
+        return
+    # A scene getting a new take still has its earlier, ready file: it counts as ready.
+    redoing = {
+        job.scene_id
+        for job in db.session.execute(
+            select(Job).where(
+                Job.project_id == project.id, Job.type == "voice", Job.state.in_(jobs_module.ACTIVE)
+            )
+        ).scalars()
+        if job.input.get("previousStatus") == "ready"
+    }
+
+    def voice_ok(s: Scene) -> bool:
+        return s.voice_status == "ready" or (
+            s.voice_status in ("queued", "running") and s.id in redoing and s.voice_asset_id is not None
+        )
+
+    complete = bool(scenes) and all(voice_ok(s) and s.visual_status == "ready" for s in scenes)
     project.status = "ready" if complete else "draft"
 
 
@@ -183,10 +203,14 @@ def release_assets(asset_ids: list) -> None:
 
 def scene_json(scene: Scene) -> dict[str, Any]:
     def media(asset) -> dict[str, Any] | None:
-        # Filled with presigned links once generation exists (milestone B4).
+        # The link is signed here, without a network call, and works for 2 hours.
         if asset is None:
             return None
-        return {"assetId": str(asset.id), "durationSeconds": asset.duration_seconds}
+        return {
+            "assetId": str(asset.id),
+            "url": get_storage().presigned_get(asset.s3_key),
+            "durationSeconds": asset.duration_seconds,
+        }
 
     return {
         "id": str(scene.id),
@@ -200,7 +224,7 @@ def scene_json(scene: Scene) -> dict[str, Any]:
         "estimatedSeconds": estimated_seconds(scene.narration),
         "voiceStatus": scene.voice_status,
         "visualStatus": scene.visual_status,
-        "voice": media(scene.voice_asset),
+        "voice": voice_media(scene.voice_asset, media),
         "visual": media(scene.visual_asset),
         "words": scene.words,
         "wordsEdited": scene.words_edited,
@@ -208,6 +232,20 @@ def scene_json(scene: Scene) -> dict[str, Any]:
         "trimEnd": scene.trim_end,
         "lastError": scene.last_error,
     }
+
+
+def voice_media(asset, media) -> dict[str, Any] | None:
+    """The voice file plus what the editor shows about it: who made it, in which voice, and
+    whether the caption timings are only estimated (QB4-008)."""
+    out = media(asset)
+    if out is not None:
+        meta = asset.meta or {}
+        out.update(
+            provider=asset.provider,
+            voiceId=meta.get("voiceId", ""),
+            estimatedTimings=bool(meta.get("estimatedTimings")),
+        )
+    return out
 
 
 def _progress(
@@ -282,7 +320,12 @@ def estimate(project: Project) -> dict[str, Any]:
         for source in ("stock", "ai_image", "ai_video")
     }
     items = [
-        {"type": "voice", "count": len(voices), "credits": sum(voice_credits(s.narration) for s in voices)},
+        {
+            "type": "voice",
+            "count": len(voices),
+            # One charge for all the voices Generate makes: their total length (CR, 2026-11-25).
+            "credits": voice_credits(sum(estimated_seconds(s.narration) for s in voices)) if voices else 0,
+        },
         {"type": "visual", "count": len(by_source["stock"]), "credits": 0},
         {
             "type": "ai_image",

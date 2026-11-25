@@ -29,6 +29,11 @@ x-api-env: &api-env
   LLM_PROVIDERS: ${LLM_PROVIDERS:-mock}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   GROQ_API_KEY: ${GROQ_API_KEY:-}
+  # Voiceovers: ElevenLabs first once its key is in .env (without a key it is skipped), then
+  # the free Edge voices, which need no key. "mock" makes a tone offline.
+  VOICE_PROVIDERS: ${VOICE_PROVIDERS:-elevenlabs,edge}
+  ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+  ELEVENLABS_MODEL: ${ELEVENLABS_MODEL:-eleven_multilingual_v2}
 
 services:
   postgres:

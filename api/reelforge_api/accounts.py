@@ -113,5 +113,10 @@ def soft_delete(user: User) -> None:
     db.session.query(InstagramAccount).filter_by(user_id=user.id).delete()
     # Running work is cancelled the normal way: tasks are revoked and their results dropped.
     from .jobs import cancel_active
+    from .models import Project
 
+    # Projects first, then their jobs: the worker's locking order (QB4-015).
+    db.session.execute(
+        select(Project.id).where(Project.user_id == user.id).order_by(Project.id).with_for_update()
+    )
     cancel_active(user_id=user.id)

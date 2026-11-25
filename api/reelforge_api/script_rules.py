@@ -53,6 +53,8 @@ DEFAULT_SETTINGS = {
 COSTS = {
     "script": 1,
     "voicePer30s": 2,
+    # Redoing one scene's voice: 1 credit for a scene up to 15 seconds, else voicePer30s.
+    "voiceSceneShort": 1,
     "aiImage": 1,
     "aiVideoClip": 10,
     "render": 2,
@@ -84,9 +86,16 @@ def estimated_seconds(narration: str) -> float:
     return round(word_count(narration) / WORDS_PER_SECOND, 1)
 
 
-def voice_credits(narration: str) -> int:
-    """2 credits per started 30 seconds of a scene's voiceover (API C7)."""
-    return COSTS["voicePer30s"] * max(1, math.ceil(estimated_seconds(narration) / 30))
+def voice_credits(seconds: float) -> int:
+    """2 credits per started 30 seconds of voiceover. Generate charges the whole Reel's
+    narration at once, so short scenes are not each rounded up (decided 2026-11-25)."""
+    return COSTS["voicePer30s"] * max(1, math.ceil(seconds / 30))
+
+
+def scene_voice_credits(narration: str) -> int:
+    """C7, redoing one scene's voice: 1 credit up to 15 seconds, else 2 per started 30."""
+    seconds = estimated_seconds(narration)
+    return COSTS["voiceSceneShort"] if seconds <= 15 else voice_credits(seconds)
 
 
 def visual_credits(source: str) -> int:

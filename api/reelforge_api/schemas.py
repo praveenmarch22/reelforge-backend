@@ -106,9 +106,11 @@ def _niche(value: str) -> str:
 
 
 def _voice_id(value: str) -> str:
-    # Checked against the voice catalogue once that exists (milestone B4).
+    """One of the voices in GET /voices (D3), or "" for the default voice."""
+    from .voices import is_known
+
     value = _clean_text(value)
-    if len(value) > 100:
+    if value and not is_known(value):
         raise ValueError("That voice isn't available")
     return value
 

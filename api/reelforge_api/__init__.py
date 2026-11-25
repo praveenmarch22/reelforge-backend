@@ -100,9 +100,9 @@ def create_app(settings: Settings | None = None) -> Flask:
     )
 
     from . import tasks  # noqa: F401 - registers the Celery tasks
-    from .routes import auth, jobs_credits, me, projects, scenes, system
+    from .routes import auth, catalogue, jobs_credits, me, projects, scenes, system
 
-    for blueprint in (system.bp, auth.bp, me.bp, projects.bp, scenes.bp, jobs_credits.bp):
+    for blueprint in (system.bp, auth.bp, me.bp, projects.bp, scenes.bp, jobs_credits.bp, catalogue.bp):
         app.register_blueprint(blueprint, url_prefix=API_PREFIX + (blueprint.url_prefix or ""))
     register_cli(app)
     return app

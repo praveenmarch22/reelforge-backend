@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from reelforge_api.script_rules import estimated_seconds, voice_credits
 from reelforge_api.tasks.accounts import purge_deleted
 
 from .projects_support import (
@@ -29,6 +30,7 @@ from .projects_support import (
     scripted_project,
     set_statuses,
     start_project,
+    unsigned,
 )
 from .support import assert_error, assert_invalid
 
@@ -383,9 +385,9 @@ def test_a_new_voice_outdates_generated_voices_only(app, database, outbox):
     assert res.status_code == 200
     assert [s["voiceStatus"] for s in res.get_json()["project"]["scenes"]][2:] == ["ready"] * len(rest)
 
-    res = patch(me.browser, project["id"], {"voiceId": "voice-new"})
+    res = patch(me.browser, project["id"], {"voiceId": "IKne3meq5aSn9XLyUdCD"})
     changed = res.get_json()["project"]
-    assert changed["voiceId"] == "voice-new"
+    assert changed["voiceId"] == "IKne3meq5aSn9XLyUdCD"
     by_id = {s["id"]: s for s in changed["scenes"]}
     assert by_id[first]["voiceStatus"] == "missing"
     assert by_id[second]["voiceStatus"] == "outdated"
@@ -434,7 +436,7 @@ def test_editing_keeps_a_status_that_is_still_in_progress(app, database, outbox,
     me = creator(app)
     project = scripted_project(app, me.browser)
     set_statuses(database, project["id"], voice="ready", visual="ready", status=status)
-    res = patch(me.browser, project["id"], {"voiceId": "other-voice"})
+    res = patch(me.browser, project["id"], {"voiceId": "nPczCjzI2devNBz1zQrb"})
     assert res.status_code == 200
     assert res.get_json()["project"]["status"] == status
 
@@ -570,7 +572,7 @@ def test_duplicating_copies_script_and_settings_and_reuses_files_for_free(app, d
         assert copy[field] == source[field], field
     assert copy["status"] == "ready", "everything was generated: the copy is ready to render"
     assert copy["activeJobs"] == [] and copy["latestRender"] is None
-    strip = lambda s: {k: v for k, v in s.items() if k != "id"}  # noqa: E731
+    strip = lambda s: {k: v for k, v in unsigned(s).items() if k != "id"}  # noqa: E731
     assert [strip(s) for s in copy["scenes"]] == [strip(s) for s in source["scenes"]]
     assert not set(scene_ids(copy)) & set(scene_ids(source))
     assert scene_row(database, copy["scenes"][0]["id"])["voice_asset_id"] == uuid.UUID(voice)
@@ -636,12 +638,19 @@ def test_the_estimate_counts_what_is_missing_or_outdated(app, database, outbox):
     assert set(estimate) == {"credits", "balance", "items"}
     for entry in estimate["items"]:
         assert set(entry) == {"type", "count", "credits"}
-    assert item(estimate, "voice") == (3, 4 + 2 + 2)
+    # The voices needed are charged together: 2 credits per started 30 s of all of them
+    # (product decision 2026-11-25), not rounded up scene by scene.
+    narrations = {s["id"]: s["narration"] for s in get_project(me.browser, project["id"])["scenes"]}
+    needed = sum(estimated_seconds(narrations[s]) for s in ids[:3])
+    assert 30 < needed <= 60, "scene 1 alone is 32 s; the mock's other scenes are short"
+    voices_cost = voice_credits(needed)
+    assert voices_cost == 4, "per scene it would have been 4 + 2 + 2"
+    assert item(estimate, "voice") == (3, voices_cost)
     assert item(estimate, "ai_image") == (1, 1)
     assert item(estimate, "ai_video") == (1, 10)
     assert item(estimate, "visual") == (1, 0), "stock footage is free"
     assert item(estimate, "music") == (1, 0)
-    assert estimate["credits"] == sum(entry["credits"] for entry in estimate["items"]) == 8 + 1 + 10
+    assert estimate["credits"] == sum(entry["credits"] for entry in estimate["items"]) == voices_cost + 1 + 10
     assert estimate["balance"] == balance(me.browser)
 
     # Outdated and failed parts count; ready, queued and running ones don't.
@@ -650,7 +659,8 @@ def test_the_estimate_counts_what_is_missing_or_outdated(app, database, outbox):
         "UPDATE scenes SET voice_status = 'running', visual_status = 'queued' WHERE id = :s", s=ids[0]
     )
     estimate = me.browser.get(f"/projects/{project['id']}/estimate").get_json()
-    assert item(estimate, "voice") == (3, 6), "scenes 2, 3 (missing) and 4 (outdated)"
+    again = sum(estimated_seconds(narrations[s]) for s in ids[1:4])
+    assert item(estimate, "voice") == (3, voice_credits(again)), "scenes 2, 3 (missing) and 4 (outdated)"
 
 
 def test_the_estimate_of_a_project_with_nothing_left_to_do_is_zero(app, database, outbox):

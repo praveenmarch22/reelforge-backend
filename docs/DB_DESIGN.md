@@ -295,7 +295,9 @@ Admin kill switch per provider (AD2). Primary key `provider` (for example `hf_sp
 
 ### 3.15 idempotency_keys
 
-Makes generate, render and publish safe to repeat. Primary key `(user_id, key)`; `request_hash` (the same key with a different body is rejected), `status_code` and `response_body` (returned again for a repeat). Rows older than 24 hours are deleted.
+**Not used:** idempotency keys are kept in Redis instead (24-hour expiry comes free; see API design 1). The table stays in the schema until a migration removes it.
+
+Original plan: makes generate, render and publish safe to repeat. Primary key `(user_id, key)`; `request_hash` (the same key with a different body is rejected), `status_code` and `response_body` (returned again for a repeat). Rows older than 24 hours are deleted.
 
 ### 3.16 usage_daily
 

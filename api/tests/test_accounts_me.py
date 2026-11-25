@@ -94,9 +94,9 @@ def test_patch_changes_only_the_fields_that_are_sent(app, outbox):
 
     res = browser.patch("/me", {"defaults": {"captionStyle": "neon"}})
     assert res.get_json()["user"]["defaults"] == {"voiceId": "", "captionStyle": "neon", "mode": "faceless"}
-    res = browser.patch("/me", {"defaults": {"voiceId": "voice-7", "mode": "full_ai"}})
+    res = browser.patch("/me", {"defaults": {"voiceId": "JBFqnCBsd6RMkjVDRZzb", "mode": "full_ai"}})
     assert res.get_json()["user"]["defaults"] == {
-        "voiceId": "voice-7",
+        "voiceId": "JBFqnCBsd6RMkjVDRZzb",
         "captionStyle": "neon",
         "mode": "full_ai",
     }
@@ -107,7 +107,7 @@ def test_patch_changes_only_the_fields_that_are_sent(app, outbox):
         **account.user,
         "name": "Asha R.",
         "niche": "Fitness, Finance",
-        "defaults": {"voiceId": "voice-7", "captionStyle": "neon", "mode": "full_ai"},
+        "defaults": {"voiceId": "JBFqnCBsd6RMkjVDRZzb", "captionStyle": "neon", "mode": "full_ai"},
     }
     assert res.get_json() == {"user": expected}
     assert me(browser) == expected
@@ -225,7 +225,7 @@ def test_patch_accepts_names_at_the_limits(app, outbox):
     [
         {"onboarding_completed": True},
         {"defaults": {"caption_style": "neon"}},
-        {"defaults": {"voice_id": "voice-7"}},
+        {"defaults": {"voice_id": "JBFqnCBsd6RMkjVDRZzb"}},
     ],
 )
 def test_field_names_are_camel_case_only(app, outbox, body):

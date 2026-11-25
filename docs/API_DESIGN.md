@@ -233,9 +233,14 @@ The voice item is priced on the total length of the voices needed (here about 45
 **B11. `POST /projects/:id/generate`**: Verified, **idempotent**. Generates all missing or outdated voices, visuals and music.
 - Body: optional `sceneIds` (limit to these scenes).
 - `202` → `{"jobs": [Job], "creditsReserved": 6, "balance": 80}`.
-- Errors: `402 insufficient_credits` (nothing started), `409 already_running` (everything already in progress), `503 provider_unavailable`.
+- Starts, side by side, a voice job for every scene whose voice is missing, outdated or failed, and a visual job for every scene whose visual is (not upload scenes: those wait for a file). A visual is fitted to the scene's estimated length until its voice exists; the renderer stretches or trims clips to the final length.
+- Voices are charged together: 2 credits per started 30 s of all of them, split over the voice jobs in proportion to their length, so a failed scene refunds its own part (a short scene's part can be 0). A Generate that makes one voice charges what C7 would. Visuals cost as in C8. All of it is reserved at once, or nothing starts (CR-1).
+- If the project has no music, a library track tagged with its `musicMood` is chosen (D4; free).
+- The project is `generating` until its last voice or visual job ends, then `ready` (the timeline is saved) or `needs_attention` (some scene failed: it shows `failed` with `lastError`; Generate again retries just those).
+- Nothing left to make → `200` with `{"jobs": [], "creditsReserved": 0, "balance"}`; a run whose jobs have all ended is closed, a complete draft becomes `ready`, and nothing else changes.
+- Errors: `400` (`sceneIds` not of this project), `402 insufficient_credits` (nothing started), `409 already_running` (the script is being written, the Reel is rendering or posting, or everything left is already in progress), `503 provider_unavailable`.
 
-**B12. `GET /projects/:id/timeline`**: User. The timeline for the Remotion Player, with presigned URLs. `200` → `{"timelineVersion": 4, "timeline": {…}}` (shape in [PIPELINE_STRATEGY.md](PIPELINE_STRATEGY.md)). Scenes not ready yet have empty `src` and show a placeholder.
+**B12. `GET /projects/:id/timeline`**: User. The timeline for the Remotion Player, built from the scenes as they are now, with links valid for 2 hours. `200` → `{"timelineVersion": 4, "timeline": {…}, "durationSeconds": 24.7, "tooLong": false, "ready": true}` (shape in [PIPELINE_STRATEGY.md](PIPELINE_STRATEGY.md), plus `transition`, each scene's `ready` and the visual's `trimStart`/`trimEnd`). A scene's length is its voice plus 0.3 s (at least 1.5 s), or the estimate until the voice exists. Scenes not ready yet have an empty `src` (and no `words`) and show their mood placeholder; a voice made from older narration or mood is left out (also while its new take runs, or after it failed), since it says the old words. `music` is the chosen track or upload, or the track Generate would choose (a track taken out of the library is replaced by that pick); it names what plays: `trackId`, `title` and `license` (the credit line for posting), or `assetId` for an upload; with `ducking` off its `duckedVolume` equals its `volume`. `timelineVersion` goes up with every edit. `tooLong` is true over 90 s (rendering refuses it).
 
 ### C. Scenes (10)
 
@@ -289,7 +294,7 @@ While the project's script is being written (status `scripting`), C1–C6 answer
 
 **D3. `GET /voices`**: User. `200` → `{"items": [{"id", "name", "provider": "elevenlabs", "gender", "accent", "style", "previewUrl"}]}`. A curated list of 8 voices, the first being the default. `previewUrl` is ElevenLabs' public sample clip (asked for once a day); it is `""` when ElevenLabs can't be reached. `voiceId` values elsewhere (A10 defaults, B3, B5, C7) must be one of these ids or `""` (the default voice).
 
-**D4. `GET /music`**: User. Query: `mood`. `200` → `{"items": [{"id", "title", "durationSeconds", "moods", "license", "previewUrl"}]}`.
+**D4. `GET /music`**: User. Query: `mood` (one of the 10; optional). `200` → `{"items": [{"id", "title", "durationSeconds", "moods", "license", "sourceUrl", "previewUrl"}]}`, by title. `previewUrl` plays the stored file (2 hours). The library is the 15 CC BY 4.0 tracks by Kevin MacLeod (incompetech.com) approved on 2026-11-25; a posted Reel credits its track in the caption (milestone B6).
 
 ### E. Rendering (3)
 

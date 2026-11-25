@@ -205,6 +205,12 @@ class UpdateSceneBody(SceneFields):
     trim_end: Seconds | None = None
 
 
+class GenerateBody(Body):
+    """B11. `sceneIds` limits Generate to these scenes; without it, the whole Reel."""
+
+    scene_ids: Annotated[list[Id], Field(min_length=1, max_length=200)] | None = None
+
+
 class ReorderBody(Body):
     scene_ids: Annotated[list[Id], Field(min_length=1, max_length=200)]
 

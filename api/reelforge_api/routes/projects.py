@@ -1,6 +1,6 @@
 """Ideas and projects (API design group B: B1 to B10).
 
-B11 (generate) and B12 (timeline) belong to the generation milestone (B4).
+B11 (generate) and B12 (timeline) are milestone B4 slice 3.
 """
 
 from __future__ import annotations
@@ -8,14 +8,16 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, make_response, request
 from sqlalchemy import and_, case, func, or_, select
 
-from .. import credits, jobs, projects, ratelimit
+from .. import credits, jobs, projects, ratelimit, reel
 from ..auth import current_user, require_user
 from ..errors import ApiError
 from ..extensions import db
+from ..idempotency import idempotent
 from ..job_types import llm_available
-from ..models import Asset, Job, MusicTrack, Project, Scene
+from ..models import Asset, CreditAccount, Job, MusicTrack, Project, Scene
 from ..project_schemas import (
     CreateProjectBody,
+    GenerateBody,
     IdeasBody,
     InstructionsBody,
     UpdateProjectBody,
@@ -413,3 +415,44 @@ def hooks(project_id: str):
 def estimate(project_id: str):
     """B10."""
     return jsonify(projects.estimate(projects.get_project(current_user().id, project_id)))
+
+
+@bp.post("/projects/<project_id>/generate")
+@require_user(verified=True)
+@idempotent
+def generate(project_id: str):
+    """B11. Starts every missing, outdated or failed voice and visual, and picks music if none
+    is chosen. The voices are charged on the whole Reel's length; nothing starts unless all of
+    it can be paid for."""
+    body = read_body(GenerateBody, allow_empty=True)
+    project = projects.get_project(current_user().id, project_id, lock=True)
+    wanted = None
+    if body.scene_ids is not None:
+        wanted = {str(s) for s in body.scene_ids}
+        if not wanted <= {str(s.id) for s in project.scenes}:
+            raise _bad("sceneIds", "List scenes of this project only")
+    new_jobs, reserved = reel.generate(project, wanted)
+    if not new_jobs:
+        # Nothing left to make: the Reel is complete, or waits on an upload. A run whose jobs
+        # have all ended is closed here too.
+        reel.advance_project(project.id)
+        if project.status == "draft":
+            projects.after_edit(project, force=True)  # a draft whose scenes are all made is ready
+        db.session.commit()
+        return jsonify(
+            jobs=[], creditsReserved=0, balance=db.session.get(CreditAccount, project.user_id).balance
+        ), 200
+    projects.after_edit(project)
+    db.session.commit()
+    balance = db.session.get(CreditAccount, project.user_id).balance
+    answer = jsonify(jobs=jobs.jobs_json(new_jobs), creditsReserved=reserved, balance=balance)
+    jobs.dispatch(new_jobs)
+    return answer, 202
+
+
+@bp.get("/projects/<project_id>/timeline")
+@require_user()
+def get_timeline(project_id: str):
+    """B12. The Reel as the player shows it now, with links valid for 2 hours."""
+    project = projects.get_project(current_user().id, project_id)
+    return jsonify(reel.timeline_json(project))

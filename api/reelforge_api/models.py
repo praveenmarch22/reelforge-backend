@@ -237,13 +237,20 @@ class Job(db.Model):
 
 
 class MusicTrack(db.Model):
-    """The royalty-free music library (filled in milestone B4)."""
+    """The royalty-free music library (B4 slice 3), filled by `flask music-seed`."""
 
     __tablename__ = "music_tracks"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     title: Mapped[str] = mapped_column(Text)
+    s3_key: Mapped[str] = mapped_column(Text, unique=True)
+    duration_seconds: Mapped[float] = mapped_column(Numeric(8, 3, asdecimal=False))
+    moods: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
+    license: Mapped[str] = mapped_column(Text)
+    source_url: Mapped[str] = mapped_column(Text, server_default="")
     is_active: Mapped[bool] = mapped_column(server_default=text("true"))
+    created_at: Mapped[datetime] = _now()
+    updated_at: Mapped[datetime] = _now()
 
 
 class ProviderSwitch(db.Model):

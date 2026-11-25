@@ -176,7 +176,9 @@ def scene_seconds(scene: Scene) -> float:
     return max(1.0, estimated_seconds(scene.narration))
 
 
-def start_visual_job(project: Project, scene: Scene, *, stock_id: str | None = None) -> Job:
+def start_visual_job(
+    project: Project, scene: Scene, *, stock_id: str | None = None, reserve: bool = True
+) -> Job:
     """Creates a visual job for one scene and reserves its credits (C8, C10). The project
     must be locked. Caller commits, then dispatches.
 
@@ -190,7 +192,7 @@ def start_visual_job(project: Project, scene: Scene, *, stock_id: str | None = N
     meta = (scene.visual_asset.meta or {}) if scene.visual_asset else {}
     # Clips this scene has already had, newest last, so "regenerate" moves on (QB4S2-001).
     seen = [c for c in [*meta.get("seen", []), meta.get("providerId")] if c][-SEEN_MAX:]
-    account = credits.lock_account(user.id)
+    account = credits.lock_account(user.id) if reserve else None  # Generate reserves its batch
     job = jobs.new_job(
         user.id,
         "visual",
@@ -214,7 +216,8 @@ def start_visual_job(project: Project, scene: Scene, *, stock_id: str | None = N
         },
         cost=0 if stock_id else visual_credits(source),
     )
-    credits.reserve(account, [job])
+    if account is not None:
+        credits.reserve(account, [job])
     scene.visual_status = "queued"
     return job
 
@@ -466,6 +469,7 @@ class VisualJob:
         db.session.expire(scene, ["visual_asset"])
         if project is not None:
             after_edit(project)
+            _advance(project.id, finishing=job.id)
         return {
             "visual": {
                 "assetId": str(asset.id),
@@ -506,6 +510,13 @@ class VisualJob:
         project = db.session.get(Project, scene.project_id)
         if project is not None:
             after_edit(project)
+            _advance(project.id)
+
+
+def _advance(project_id, finishing=None) -> None:
+    from .reel import advance_project
+
+    advance_project(project_id, finishing)
 
 
 def _fallback_slot(user_id) -> str:

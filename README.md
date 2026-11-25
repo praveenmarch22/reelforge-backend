@@ -59,6 +59,14 @@ stops everything. Add `-v` to also delete the local database and files.
 
 Code changes in `api/` are picked up by the API automatically. The worker needs `docker compose restart worker` after a change to task code.
 
+### Music library
+
+The starter music (15 CC BY 4.0 tracks by Kevin MacLeod, listed in `api/reelforge_api/music_library.json`) is downloaded into storage and the database by a command that is safe to run again:
+
+```bash
+docker compose exec api flask music-seed
+```
+
 ## How the API is organised
 
 ```

@@ -1,4 +1,4 @@
-"""Command-line helpers: `flask storage-init`, `flask worker-ping`."""
+"""Command-line helpers: `flask storage-init`, `flask worker-ping`, `flask music-seed`."""
 
 from __future__ import annotations
 
@@ -35,3 +35,12 @@ def register_cli(app: Flask) -> None:
         from .tasks.system import ping
 
         click.echo(ping.delay().get(timeout=timeout))
+
+    @app.cli.command("music-seed")
+    @click.option("--force", is_flag=True, help="Download every track again.")
+    def music_seed(force: bool) -> None:
+        """Fill the music library from music_library.json (safe to run again)."""
+        from .music import seed
+
+        count = seed(force=force, echo=click.echo)
+        click.echo(f"music library ready; {count} file(s) downloaded")

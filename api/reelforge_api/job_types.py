@@ -331,6 +331,12 @@ class Script:
         if project is not None and project.status == "scripting":
             previous = job.input.get("previousStatus", "draft")
             project.status = "draft" if previous == "scripting" else previous
+            if project.status == "generating":
+                # Its voices and visuals may all have ended while the script was being
+                # written; then the run is over now (QB4S3-001).
+                from .reel import advance_project
+
+                advance_project(project.id)
 
 
 class RewriteScene:

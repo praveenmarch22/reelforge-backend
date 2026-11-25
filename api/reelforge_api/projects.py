@@ -92,8 +92,10 @@ def after_edit(project: Project, *, force: bool = False) -> None:
     now missing or outdated (DB design 5). Projects that are still being written or are in
     the middle of rendering or posting keep their status. `force` decides it for a draft too
     (a duplicated project)."""
-    # Any change to the project or its scenes moves it to the top of the dashboard (QB3-007).
+    # Any change to the project or its scenes moves it to the top of the dashboard (QB3-007),
+    # and the preview's timeline is a new version (B12; a render of an older one is outdated).
     project.updated_at = func.now()
+    project.timeline_version = Project.timeline_version + 1
     if project.status in ("scripting", "generating", "rendering", "posting"):
         return
     scenes = project.scenes
@@ -126,6 +128,16 @@ def after_edit(project: Project, *, force: bool = False) -> None:
         for s in scenes
     )
     project.status = "ready" if complete else "draft"
+    save_timeline(project)
+
+
+def save_timeline(project: Project) -> None:
+    """Keeps `projects.timeline` (storage keys, used for the Reel's length in lists) equal to
+    the Reel as it is when it is ready; a Reel that isn't ready has none (BUG-044, QB4S3-002)."""
+    from .reel import build
+
+    db.session.flush()
+    project.timeline = build(project, links=False) if project.status == "ready" else None
 
 
 def renumber(project: Project) -> None:
@@ -300,7 +312,9 @@ def summary_json(project: Project, script_progress: int | None = None,
         "mode": project.mode,
         "status": project.status,
         "targetSeconds": project.target_seconds,
-        "durationSeconds": None,  # from the timeline, milestone B4
+        "durationSeconds": round(project.timeline["durationInFrames"] / project.timeline["fps"], 2)
+        if project.timeline
+        else None,
         "thumbnailUrl": None,  # from the render, milestone B5
         "progress": _progress(project, script_progress, scene_counts),
         "updatedAt": _iso(project.updated_at),

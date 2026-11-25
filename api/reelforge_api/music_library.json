@@ -1,0 +1,23 @@
+{
+  "about": "The starter music library (B4 slice 3), approved by the product owner on 2026-11-25. All tracks are by Kevin MacLeod (incompetech.com) under CC BY 4.0: a posted Reel credits the track in its caption. Moods follow incompetech's own feel tags. `flask music-seed` downloads each file into storage and adds or updates its row.",
+  "license": "CC BY 4.0: \"{title}\" by Kevin MacLeod (incompetech.com), https://creativecommons.org/licenses/by/4.0/",
+  "base_url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/",
+  "source_page": "https://incompetech.com/music/royalty-free/music.html",
+  "tracks": [
+    {"title": "Meditation Impromptu 01", "moods": ["calm"]},
+    {"title": "Inspired", "moods": ["inspiring", "calm"]},
+    {"title": "Wallpaper", "moods": ["joyful", "inspiring"]},
+    {"title": "Carefree", "moods": ["joyful", "funny"]},
+    {"title": "Monkeys Spinning Monkeys", "moods": ["funny", "joyful"]},
+    {"title": "Fluffing a Duck", "moods": ["funny"]},
+    {"title": "Heroic Age", "moods": ["triumphant", "excited"]},
+    {"title": "Movement Proposition", "moods": ["excited", "triumphant"]},
+    {"title": "Volatile Reaction", "moods": ["excited", "tense"]},
+    {"title": "Hitman", "moods": ["tense", "serious"]},
+    {"title": "Investigations", "moods": ["mysterious", "funny"]},
+    {"title": "Rising Game", "moods": ["mysterious", "tense"]},
+    {"title": "Floating Cities", "moods": ["serious", "sad"]},
+    {"title": "Sad Trio", "moods": ["sad"]},
+    {"title": "Heartbreaking", "moods": ["sad", "calm"]}
+  ]
+}

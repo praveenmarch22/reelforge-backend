@@ -64,7 +64,9 @@ def voice_input_hash(narration: str, mood: str, voice_id: str) -> str:
 # ---------------------------------------------------------------- starting
 
 
-def start_voice_job(project: Project, scene: Scene, voice_id: str = "") -> Job:
+def start_voice_job(
+    project: Project, scene: Scene, voice_id: str = "", *, cost: int | None = None, reserve: bool = True
+) -> Job:
     """Creates a voice job for one scene and reserves its credits (C7). The project must be
     locked. Caller commits, then dispatches.
 
@@ -75,7 +77,9 @@ def start_voice_job(project: Project, scene: Scene, voice_id: str = "") -> Job:
     if not voice_available():
         raise ApiError(503, "provider_unavailable", jobs.MESSAGES["provider_unavailable"])
     voice = voices.resolve(voice_id, project.voice_id, user.default_voice_id)
-    account = credits.lock_account(user.id)
+    # Generate (B11) passes the scene's share of the whole Reel's voice price and reserves the
+    # batch itself, all or nothing.
+    account = credits.lock_account(user.id) if reserve else None
     job = jobs.new_job(
         user.id,
         "voice",
@@ -87,9 +91,10 @@ def start_voice_job(project: Project, scene: Scene, voice_id: str = "") -> Job:
             "voiceId": voice.id,
             "previousStatus": scene.voice_status,
         },
-        cost=scene_voice_credits(scene.narration),
+        cost=scene_voice_credits(scene.narration) if cost is None else cost,
     )
-    credits.reserve(account, [job])
+    if account is not None:
+        credits.reserve(account, [job])
     # A ready project stays ready while a scene gets a new take (its old voice still plays);
     # it goes back to draft only if the new voice fails (on_stop).
     scene.voice_status = "queued"
@@ -176,6 +181,7 @@ class VoiceJob:
         project = db.session.get(Project, job.project_id)
         if project is not None:
             after_edit(project)
+            _advance(project.id, finishing=job.id)
         return {
             "voice": {"assetId": str(asset.id), "durationSeconds": result.duration},
             "estimatedTimings": result.estimated_timings,
@@ -208,3 +214,10 @@ class VoiceJob:
         project = db.session.get(Project, scene.project_id)
         if project is not None:
             after_edit(project)
+            _advance(project.id)
+
+
+def _advance(project_id, finishing=None) -> None:
+    from .reel import advance_project
+
+    advance_project(project_id, finishing)

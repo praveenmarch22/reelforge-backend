@@ -930,6 +930,8 @@ scripting ──script ready──► draft ──generate──► generating �
    any edit to a rendered/posted project ───────────────┘ (back to ready; the old render is marked outdated)
 ```
 
+**As built (B4 slice 3):** Generate (B11) creates all the voice and visual jobs at once and they run side by side, instead of visuals waiting for voices: a visual is fitted to the scene's estimated length (2.5 words a second) and the renderer stretches or trims it to the voice's real length, so waiting would only make the Reel slower. Every voice and visual job, when it ends, calls `advance_project`, which closes the run when no voice or visual job of the project is active: `ready` or `needs_attention`. `projects.timeline` (storage keys) is kept equal to the Reel whenever it is `ready` and empty otherwise; the list's length comes from it. The preview's timeline (B12) is built live from the scenes (`timeline.py`), so it shows every edit at once; `timeline_version` goes up with every edit.
+
 ### Task design rules
 1. **Idempotent**: a task first checks if its output already exists (same `input_hash`); if so it links the existing asset and returns.
 2. **Retries**: provider calls use the prototype's `with_retry` and `with_fallback`. Celery-level retry only for infrastructure failures (database, S3).

@@ -6,9 +6,9 @@ This is the single place to see where the project stands. It is updated at the e
 
 ## Where we are
 
-**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend is built one task at a time: B1 (setup), B2 (accounts) and B3 (projects, scripts, scenes, jobs and credits) are done, and so are the first two slices of B4 (voiceovers and visuals), each reviewed by QA and covered by automated tests (1291 backend tests). Scripts are written by real AI models (Gemini, with Groq as backup); voiceovers by ElevenLabs, with the free Edge voices as backup; visuals are Pixabay stock clips and FLUX images on Cloudflare.**
+**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend is built one task at a time: B1 (setup), B2 (accounts) and B3 (projects, scripts, scenes, jobs and credits) are done, and so is B4 (generation: voiceovers, visuals, music, Generate Reel and the preview timeline), each reviewed by QA and covered by automated tests (1380 backend tests). Scripts are written by real AI models (Gemini, with Groq as backup); voiceovers by ElevenLabs, with the free Edge voices as backup; visuals are Pixabay stock clips and FLUX images on Cloudflare; music comes from a 15-track CC BY library.**
 
-Next up: **B4 slice 3** on the backend: the music library (about 10 free-license tracks, listed for the product owner's OK before download), Generate Reel (B11) and the preview timeline (B12) and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
+Next up: the frontend **F5 (New Reel and script editor) and F6 (editor with the live preview)** against the real backend, so a Reel can be made on screen end to end; then **B5 rendering** and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
 
 ## Milestones
 
@@ -30,7 +30,7 @@ Next up: **B4 slice 3** on the backend: the music library (about 10 free-license
 | B1 | Backend setup | Done | Flask API, Postgres (16 tables from the baseline migration), Redis, Celery worker, MinIO, Docker Compose. QA reviewed; see "B1 and B2 result" below |
 | B2 | Accounts | Done | Sign-up with email verification, login, 30-day sessions, password reset, profile, change password, delete account (API A1-A12). QA reviewed; both rule decisions made |
 | B3 | Projects, scripts and jobs | Done | API B1–B10, C1–C6, G, H; language models (Gemini, Groq, offline mock); credits reserved, refunded and reset monthly. QA verdict was fail (a credit race); fixed and retested. See [FIX_LOG_B3.md](docs/qa/FIX_LOG_B3.md) |
-| B4 | Generation | Slices 1 (voice) and 2 (visuals) done; slice 3 (music, Generate, timeline) not started | Three slices: 1 voice (ElevenLabs, Edge TTS backup), 2 visuals (Pexels stock, Cloudflare FLUX images), 3 music, Generate Reel (B11) and timeline (B12). Tester and QA after each slice |
+| B4 | Generation | Done: voice (C7, D3), visuals (C8–C10), music (D4), Generate (B11), timeline (B12) | Three slices: 1 voice (ElevenLabs, Edge TTS backup), 2 visuals (Pexels stock, Cloudflare FLUX images), 3 music, Generate Reel (B11) and timeline (B12). Tester and QA after each slice |
 | B5–B8 | Backend features | Not started | Built one task at a time, each agreed with the product owner first |
 | I1–I3 | Integration and launch | Not started | |
 
@@ -166,6 +166,8 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 | 2026-11-25 | Voice pricing: Generate charges 2 credits per started 30 s of the whole Reel's narration (60 s costs 4), not per scene. Redoing one scene's voice costs 1 credit, or 2 per started 30 s for a scene over 15 s |
 | 2026-11-25 | Stock video: Pixabay is the stock source for now, because Pexels has paused new API keys. The stock code is built so Pexels can go in front of Pixabay when it reopens. Pixabay's terms are followed: clips are downloaded to our storage, searches are kept for 24 hours, and stock search shows where results come from |
 | 2026-11-25 | When no stock clip fits a scene, the AI image used instead is not charged (the Workers AI free allowance covers it) |
+| 2026-11-25 | Music library: 15 tracks by Kevin MacLeod (incompetech.com, CC BY 4.0), 1 to 4 per mood, approved by the product owner and filled by `flask music-seed`. A posted Reel credits its track in the caption, like the ElevenLabs line (milestone B6) |
+| 2026-11-25 | Generate runs every scene's voice and visual side by side (visuals fitted to the estimated length) rather than visuals after voices: faster, and the renderer fits clips to the real voice length |
 | 2026-11-17 | Two public GitHub repositories under praveenmarch22: [reelforge-frontend](https://github.com/praveenmarch22/reelforge-frontend) (web app) and [reelforge-backend](https://github.com/praveenmarch22/reelforge-backend) (backend, all documents, milestones and this status document). Commits use GitHub's private no-reply email |
 
 ## Open questions
@@ -205,3 +207,4 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 | 2026-11-25 | Gemini and Groq keys added; a real script written end to end through the app. Model defaults updated. B4 planned with the product owner |
 | 2026-11-25 | ElevenLabs key added. B4 slice 1 built: voiceovers per scene (C7), voice list (D3), Idempotency-Key. QA found 16 issues and the Tester 6 bugs over three rounds; all fixed. Voice pricing and the ElevenLabs credit line decided. 1090 backend tests |
 | 2026-11-25 | Pexels paused new keys, so Pixabay is the stock source; Pixabay and Cloudflare keys added. B4 slice 2 built: visuals per scene (C8), stock search (C9), choosing a visual (C10). QA found 12 issues and the Tester 2 bugs over three rounds; all fixed. 1291 backend tests |
+| 2026-11-25 | B4 slice 3 built: music library (15 tracks, `flask music-seed`), Generate Reel (B11), timeline (B12), music list (D4). A real 5-scene Reel generated in 26 s for 2 credits. QA found 6 issues and the Tester 1 bug over two rounds; all fixed. B4 complete. 1380 backend tests |

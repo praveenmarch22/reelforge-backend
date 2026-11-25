@@ -32,9 +32,9 @@ class Settings:
     music_providers: list[str] = field(default_factory=lambda: _list("MUSIC_PROVIDERS", "library,mock"))
 
     gemini_api_key: str = field(default_factory=lambda: _str("GEMINI_API_KEY"))
-    gemini_model: str = field(default_factory=lambda: _str("GEMINI_MODEL", "gemini-2.5-flash"))
+    gemini_model: str = field(default_factory=lambda: _str("GEMINI_MODEL", "gemini-3.5-flash"))
     groq_api_key: str = field(default_factory=lambda: _str("GROQ_API_KEY"))
-    groq_model: str = field(default_factory=lambda: _str("GROQ_MODEL", "llama-3.3-70b-versatile"))
+    groq_model: str = field(default_factory=lambda: _str("GROQ_MODEL", "openai/gpt-oss-120b"))
 
     elevenlabs_api_key: str = field(default_factory=lambda: _str("ELEVENLABS_API_KEY"))
     elevenlabs_voice_id: str = field(default_factory=lambda: _str("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"))

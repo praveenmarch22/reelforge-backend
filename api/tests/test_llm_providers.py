@@ -141,7 +141,7 @@ def test_gemini_is_asked_first_with_the_key_in_a_header_and_json_output(real_app
     (call,) = http.calls
     assert call["method"] == "POST"
     assert call["url"].startswith(f"https://{GEMINI_HOST}/")
-    assert ":generateContent" in call["url"] and "gemini-2.5-flash" in call["url"]
+    assert ":generateContent" in call["url"] and "gemini-3.5-flash" in call["url"]
     assert GEMINI_KEY not in call["url"], "the key never goes in the address (it ends up in logs)"
     assert call["headers"]["x-goog-api-key"] == GEMINI_KEY
     body = call["json"]

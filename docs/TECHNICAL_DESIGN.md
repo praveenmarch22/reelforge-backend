@@ -968,7 +968,7 @@ All providers sit behind the interfaces in `packages/core/providers` (from the p
 
 | Purpose | Primary | Fallback | Free tier | Worker queue | Settings (`.env`) |
 |---|---|---|---|---|---|
-| Ideas, scripts, scene rewrites, post captions and hashtags | **Google Gemini API** (`gemini-2.5-flash`) | Groq (Llama 3.3 70B) | Yes, both | `llm` | `GEMINI_API_KEY`, `GEMINI_MODEL`, `GROQ_API_KEY` |
+| Ideas, scripts, scene rewrites, post captions and hashtags | **Google Gemini API** (`gemini-3.5-flash`) | Groq (`openai/gpt-oss-120b`) | Yes, both | `llm` | `GEMINI_API_KEY`, `GEMINI_MODEL`, `GROQ_API_KEY` |
 | Voiceover with word timings and emotion | **ElevenLabs** (text-to-speech with timestamps) | Edge TTS (no key) | ElevenLabs about 10 min/month, non-commercial | `voice` | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL` |
 | Speech to text: captions for uploaded voiceovers, and backup when voice timings are missing | **Groq Whisper API** (`whisper-large-v3-turbo`) | Estimated word timings (captions only roughly in sync), with a warning | Yes | `voice` | `GROQ_API_KEY`, `WHISPER_MODEL` |
 | Stock video for faceless scenes | **Pexels API** | Pixabay API, then an AI image | Yes, both | `visuals` | `PEXELS_API_KEY`, `PIXABAY_API_KEY` |

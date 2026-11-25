@@ -69,9 +69,9 @@ class Settings(BaseSettings):
     # stand-in for development and tests; production refuses it.
     llm_providers: str = "gemini,groq"
     gemini_api_key: str = Field(default="", repr=False)
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.5-flash"
     groq_api_key: str = Field(default="", repr=False)
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
 
     # How background jobs are started. "celery": sent to the worker. "manual": kept in a list
     # for tests to run one by one. Empty = manual in the test environment, celery elsewhere.

@@ -35,10 +35,11 @@ x-api-env: &api-env
   ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
   ELEVENLABS_MODEL: ${ELEVENLABS_MODEL:-eleven_multilingual_v2}
   # Visuals: stock clips from Pixabay, AI images from FLUX on Cloudflare Workers AI. Without
-  # keys the mock stands in for both, so the stack still runs.
-  STOCK_PROVIDERS: ${STOCK_PROVIDERS:-mock}
+  # their keys in .env they are skipped and visuals answer "not available"; set
+  # STOCK_PROVIDERS=mock and IMAGE_PROVIDERS=mock there to work offline.
+  STOCK_PROVIDERS: ${STOCK_PROVIDERS:-pixabay}
   PIXABAY_API_KEY: ${PIXABAY_API_KEY:-}
-  IMAGE_PROVIDERS: ${IMAGE_PROVIDERS:-mock}
+  IMAGE_PROVIDERS: ${IMAGE_PROVIDERS:-cloudflare}
   CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
   CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
 

@@ -57,8 +57,8 @@ Left out from Stitch: the phone preview in the right panel (nothing is generated
 | Inspector, Visual tab | Source (Stock, AI image, AI video, Upload), visual prompt and stock query (editable), **Regenerate visual** with its cost, **Search stock** (results grid with "from Pixabay" and the author; click to use) | C2, C8, C9, C10 |
 | Inspector, Voice tab | Narration (editable), mood, voice (this scene, from D3), **Regenerate voice** with its cost, the CA-4 warning when caption words were fixed | C2, C7, D3 |
 | Inspector, Text tab | On-screen text, and the caption words (fix a word's spelling, times kept) | C2 `onScreenText`, `words` |
-| Audio bar | Narrator (project voice), music track (D4 list by mood, preview), voice and music volume, ducking on or off, caption style (Bold pop, Clean, Neon), captions on or off | B5, D4 |
-| Autosave | Every edit saves at once (or after 1 s of typing); a small "Saved" or "Saving…" note in the header | |
+| Audio bar | Narrator (project voice; changing it asks first, since every voice is then redone), music mood and track (the whole library, the mood's tracks first; Automatic follows the mood), voice and music volume, ducking on or off, caption style (Bold pop, Clean, Neon), captions on or off | B5, D4 |
+| Autosave | Choices save at once; typing saves 0.8 s after the last key and when the field is left, with "Saving…" / "Saved" under the field. Volume sliders save 0.5 s after they stop. Switching scene first saves the scene's unsaved text; if that fails, the editor stays on the scene with the error | |
 
 Left out from Stitch: the second header bar, "Export Reel" (Render is the one action), "Aspect 9:16 Ultra HD", "Pacing 142 WPM", "Model: ForgeVision", CFG, seed and "Motion: warp", the "−3.2 dBFS" meter and master limiter, Stitch's moods (Tense, Authoritative, Urgent, Whisper; the 10 PRD moods are used), and **Alternative takes** (the backend keeps one visual per scene; "Search stock" and "Regenerate" are the ways to change it). Upload is shown but disabled until uploads arrive (milestone B7).
 

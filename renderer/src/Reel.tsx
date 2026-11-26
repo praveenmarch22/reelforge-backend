@@ -1,6 +1,6 @@
 import React from 'react';
 import {AbsoluteFill, Audio, Sequence} from 'remotion';
-import {SceneView} from './Scene';
+import {SceneView, type MediaErrorHandler} from './Scene';
 import type {Timeline} from './types';
 import {resolveSrc} from './util';
 
@@ -13,6 +13,7 @@ export const musicVolume = (frame: number, t: Timeline): number => {
   let duck = 0;
   for (const s of t.scenes) {
     const start = s.startFrame;
+    if (!s.voice.durationSeconds) continue; // no voice yet: nothing to duck under
     const end = s.startFrame + s.voice.durationSeconds * t.fps;
     if (frame < start - DUCK_RAMP_FRAMES || frame > end + DUCK_RAMP_FRAMES) continue;
     const d =
@@ -29,7 +30,10 @@ export const musicVolume = (frame: number, t: Timeline): number => {
   return Math.max(0, base * Math.min(fadeIn, fadeOut));
 };
 
-export const Reel: React.FC<Timeline> = (t) => (
+/** The timeline, plus (in the web app's preview only) what to do when a file can't be played. */
+export type ReelProps = Timeline & {onMediaError?: MediaErrorHandler};
+
+export const Reel: React.FC<ReelProps> = (t) => (
   <AbsoluteFill style={{backgroundColor: 'black'}}>
     {t.scenes.map((scene) => (
       <Sequence key={scene.id} name={scene.id} from={scene.startFrame} durationInFrames={scene.durationInFrames}>
@@ -39,9 +43,10 @@ export const Reel: React.FC<Timeline> = (t) => (
           voiceVolume={t.voiceVolume}
           showCaptions={t.showCaptions}
           captionStyle={t.captionStyle}
+          onMediaError={t.onMediaError}
         />
       </Sequence>
     ))}
-    {t.music ? <Audio src={resolveSrc(t.music.src)} loop volume={(f) => musicVolume(f, t)} /> : null}
+    {t.music ? <Audio src={resolveSrc(t.music.src)} loop volume={(f) => musicVolume(f, t)} onError={t.onMediaError} /> : null}
   </AbsoluteFill>
 );

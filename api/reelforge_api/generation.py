@@ -174,7 +174,10 @@ class VoiceJob:
         scene.words = result.words
         scene.words_edited = False
         scene.voice_status = "ready"
-        scene.last_error = None
+        # The scene's one error line belongs to whichever part failed: a part that succeeds
+        # clears it only when the other part hasn't failed (BUG-064).
+        if scene.visual_status != "failed":
+            scene.last_error = None
         db.session.flush()
         release_assets([old])
         db.session.expire(scene, ["voice_asset"])

@@ -31,7 +31,14 @@ const motionTransform = (motion: Motion, progress: number): string => {
   }
 };
 
-const Visual: React.FC<{scene: TimelineScene; fps: number}> = ({scene, fps}) => {
+/**
+ * Called when a file can't be played. Only the web app's preview passes it (to show a message and
+ * a way to reload); without it Remotion fails loudly, which is what a render must do with a
+ * broken file.
+ */
+export type MediaErrorHandler = (error: Error) => void;
+
+const Visual: React.FC<{scene: TimelineScene; fps: number; onMediaError?: MediaErrorHandler}> = ({scene, fps, onMediaError}) => {
   const frame = useCurrentFrame();
   const {visual, durationInFrames, mood} = scene;
   const progress = frame / Math.max(1, durationInFrames - 1);
@@ -44,20 +51,24 @@ const Visual: React.FC<{scene: TimelineScene; fps: number}> = ({scene, fps}) => 
   if (visual.kind === 'image') {
     return (
       <AbsoluteFill style={{overflow: 'hidden'}}>
-        <Img src={resolveSrc(visual.src)} style={{...cover, transform: motionTransform(visual.motion, progress)}} />
+        <Img src={resolveSrc(visual.src)} onError={onMediaError ? () => onMediaError(new Error('The image could not be loaded')) : undefined} style={{...cover, transform: motionTransform(visual.motion, progress)}} />
       </AbsoluteFill>
     );
   }
 
   // Video: fit the clip to the scene (see "Fitting a video clip" in the strategy doc).
   const sceneSeconds = durationInFrames / fps;
-  const clipSeconds = visual.durationSeconds;
+  // A trimmed clip starts later and may stop early; the rest of the fitting works on what is left.
+  const trimStart = Math.max(0, visual.trimStart ?? 0);
+  const trimmedEnd = visual.trimEnd ?? visual.durationSeconds;
+  const clipSeconds = trimmedEnd ? Math.max(0, trimmedEnd - trimStart) : visual.durationSeconds;
+  const startFrom = Math.round(trimStart * fps);
   const src = resolveSrc(visual.src);
 
   if (!clipSeconds || clipSeconds >= sceneSeconds) {
     return (
       <AbsoluteFill style={{overflow: 'hidden'}}>
-        <OffthreadVideo src={src} muted style={cover} />
+        <OffthreadVideo src={src} muted startFrom={startFrom} onError={onMediaError} style={cover} />
       </AbsoluteFill>
     );
   }
@@ -68,7 +79,7 @@ const Visual: React.FC<{scene: TimelineScene; fps: number}> = ({scene, fps}) => 
   if (frame < playFrames) {
     return (
       <AbsoluteFill style={{overflow: 'hidden'}}>
-        <OffthreadVideo src={src} muted playbackRate={rate} style={cover} />
+        <OffthreadVideo src={src} muted startFrom={startFrom} onError={onMediaError} playbackRate={rate} style={cover} />
       </AbsoluteFill>
     );
   }
@@ -76,7 +87,7 @@ const Visual: React.FC<{scene: TimelineScene; fps: number}> = ({scene, fps}) => 
   return (
     <AbsoluteFill style={{overflow: 'hidden'}}>
       <Freeze frame={playFrames - 1}>
-        <OffthreadVideo src={src} muted playbackRate={rate} style={{...cover, transform: `scale(${1 + 0.08 * holdProgress})`}} />
+        <OffthreadVideo src={src} muted startFrom={startFrom} onError={onMediaError} playbackRate={rate} style={{...cover, transform: `scale(${1 + 0.08 * holdProgress})`}} />
       </Freeze>
     </AbsoluteFill>
   );
@@ -115,13 +126,14 @@ export const SceneView: React.FC<{
   voiceVolume: number;
   showCaptions: boolean;
   captionStyle: CaptionStyle;
-}> = ({scene, fps, voiceVolume, showCaptions, captionStyle}) => (
+  onMediaError?: MediaErrorHandler;
+}> = ({scene, fps, voiceVolume, showCaptions, captionStyle, onMediaError}) => (
   <AbsoluteFill>
-    <Visual scene={scene} fps={fps} />
+    <Visual scene={scene} fps={fps} onMediaError={onMediaError} />
     {/* Darken the lower half slightly so captions stay readable on bright footage. */}
     <AbsoluteFill style={{background: 'linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,0.45) 100%)'}} />
     <OnScreenText text={scene.onScreenText} fps={fps} />
     {showCaptions ? <Captions words={scene.words} fps={fps} styleName={captionStyle} /> : null}
-    {scene.voice.src ? <Audio src={resolveSrc(scene.voice.src)} volume={voiceVolume} /> : null}
+    {scene.voice.src ? <Audio src={resolveSrc(scene.voice.src)} volume={voiceVolume} onError={onMediaError} /> : null}
   </AbsoluteFill>
 );

@@ -463,7 +463,10 @@ class VisualJob:
         old = scene.visual_asset_id
         scene.visual_asset_id = asset.id
         scene.visual_status = "ready"
-        scene.last_error = None
+        # The scene's one error line belongs to whichever part failed: a part that succeeds
+        # clears it only when the other part hasn't failed (BUG-064).
+        if scene.voice_status != "failed":
+            scene.last_error = None
         db.session.flush()
         release_assets([old])
         db.session.expire(scene, ["visual_asset"])
@@ -572,7 +575,10 @@ def use_upload(project: Project, scene: Scene, asset_id: str) -> None:
     scene.visual_asset_id = asset.id
     scene.visual_source = "upload"
     scene.visual_status = "ready"
-    scene.last_error = None
+    # The scene's one error line belongs to whichever part failed: a part that succeeds
+    # clears it only when the other part hasn't failed (BUG-064).
+    if scene.voice_status != "failed":
+        scene.last_error = None
     db.session.flush()
     if old != asset.id:
         release_assets([old])

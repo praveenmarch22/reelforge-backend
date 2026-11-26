@@ -8,7 +8,7 @@ This is the single place to see where the project stands. It is updated at the e
 
 **Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend is built one task at a time: B1 (setup), B2 (accounts) and B3 (projects, scripts, scenes, jobs and credits) are done, and so is B4 (generation: voiceovers, visuals, music, Generate Reel and the preview timeline), each reviewed by QA and covered by automated tests (1380 backend tests). Scripts are written by real AI models (Gemini, with Groq as backup); voiceovers by ElevenLabs, with the free Edge voices as backup; visuals are Pixabay stock clips and FLUX images on Cloudflare; music comes from a 15-track CC BY library.**
 
-Next up: the frontend **F6 (Reel editor with the live preview)** against the real backend; then **B5 rendering**. F5 (New Reel and Script editor) is done and talks to the real backend (`npm run dev:real`) and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
+Next up: **B5 rendering** (the render service turns the timeline into an MP4), then **F7** (render and publish screens). F5 (New Reel, Script editor) and F6 (Reel editor with the live preview) are done and talk to the real backend (`npm run dev:real`): a Reel can be written, generated, previewed and edited on screen and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
 
 ## Milestones
 
@@ -23,7 +23,7 @@ Next up: the frontend **F6 (Reel editor with the live preview)** against the rea
 | F3 | App shell, dashboard and projects | Done | QA reviewed; covered by automated tests. Seed data has 6 of the 11 statuses; the rest arrive with F5-F7 |
 | F4 | Onboarding | Done | QA reviewed; covered by automated tests. See "F4 result" below |
 | F5 | New Reel and script editor | Done | Against the real backend (`npm run dev:real`); four review rounds |
-| F6 | Reel editor | Not started | Largest frontend milestone |
+| F6 | Reel editor | Done | Live Remotion preview using the renderer's own code; four review rounds |
 | F7 | Render and publish | Not started | |
 | F8 | Settings, credits and admin | Not started | |
 | F9 | Frontend hardening | Not started | |
@@ -211,3 +211,4 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 | 2026-11-25 | Pexels paused new keys, so Pixabay is the stock source; Pixabay and Cloudflare keys added. B4 slice 2 built: visuals per scene (C8), stock search (C9), choosing a visual (C10). QA found 12 issues and the Tester 2 bugs over three rounds; all fixed. 1291 backend tests |
 | 2026-11-25 | B4 slice 3 built: music library (15 tracks, `flask music-seed`), Generate Reel (B11), timeline (B12), music list (D4). A real 5-scene Reel generated in 26 s for 2 credits. QA found 6 issues and the Tester 1 bug over two rounds; all fixed. B4 complete. 1380 backend tests |
 | 2026-11-26 | Frontend F5 built against the real backend: New Reel (ideas, topic or pasted script, settings) and the Script editor (autosaved scenes, rewrites, reorder, hooks, Shorten with AI, Generate). Designs read from Stitch through Chrome. QA found 22 issues and the Tester 12 bugs over four rounds; all fixed but one deferred to F9. 530 frontend unit tests, 26 real-backend browser tests |
+| 2026-11-26 | Frontend F6 built: the Reel editor with a live Remotion preview (a copy of the renderer's drawing code, checked identical by a test), scene list, inspector (visual, voice, text), stock search, audio bar. Renderer accepts voiceless scenes, trims and a preview-only media error hook. QA found 19 issues and the Tester 12 bugs over four rounds (one backend: a failed voice's reason kept); all fixed but two deferred to F9. 622 frontend unit tests, 24 real-backend editor browser tests |

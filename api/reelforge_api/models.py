@@ -236,6 +236,28 @@ class Job(db.Model):
     finished_at: Mapped[datetime | None] = _time()
 
 
+class Render(db.Model):
+    """One rendered MP4 of a project (milestone B5), with the exact timeline it was made from."""
+
+    __tablename__ = "renders"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    job_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"))
+    timeline_version: Mapped[int] = mapped_column(Integer)
+    timeline: Mapped[dict] = mapped_column(JSONB)
+    asset_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"))
+    thumbnail_asset_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"))
+    state: Mapped[str] = mapped_column(Text, server_default="queued")
+    progress: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = _now()
+    finished_at: Mapped[datetime | None] = _time()
+
+    asset: Mapped[Asset | None] = relationship(foreign_keys=[asset_id], lazy="selectin")
+    thumbnail_asset: Mapped[Asset | None] = relationship(foreign_keys=[thumbnail_asset_id], lazy="selectin")
+
+
 class MusicTrack(db.Model):
     """The royalty-free music library (B4 slice 3), filled by `flask music-seed`."""
 

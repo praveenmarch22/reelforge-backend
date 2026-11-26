@@ -13,6 +13,25 @@ permissions:
   contents: read
 
 jobs:
+  renderer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: renderer
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: renderer/package-lock.json
+      - run: npm ci
+      - name: Types
+        run: npm run typecheck
+      - name: The render service parses
+        run: node --check server.mjs
+
   api:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -22,7 +41,7 @@ jobs:
       - name: Baseline migration matches the documented schema
         run: diff -u docs/schema.sql api/migrations/versions/0001_baseline.sql
 
-      - name: Start the stack (Postgres, Redis, MinIO, API, worker)
+      - name: Start the stack (Postgres, Redis, MinIO, API, worker, render service)
         run: docker compose up -d --build --wait
 
       - name: Lint

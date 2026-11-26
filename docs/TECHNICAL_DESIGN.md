@@ -53,7 +53,7 @@ The PRD says **what** ReelForge does. This document says **how** it is built: se
 | Web app (React) | Screens, editor state, live preview | API (JSON), S3 (presigned upload/download) | Hold API keys or call AI providers |
 | API (Flask) | Auth, validation, projects, scenes, credits, timeline building, presigned URLs, Instagram OAuth | PostgreSQL, Redis (enqueue, rate limits), S3 (sign URLs) | Long-running work, provider calls |
 | Workers (Celery) | Every AI call, downloads, music, render orchestration, Instagram publishing, scheduled tasks | Providers, PostgreSQL, S3, render service, Instagram | Serve HTTP requests |
-| Render service (Node + Remotion) | Turning a timeline into an MP4 | S3 (read assets, write MP4), worker callback | Touch the database |
+| Render service (Node + Remotion) | Turning a timeline into an MP4 | Download the timeline's files and upload the MP4 through links the worker gives it | Touch the database or hold storage keys |
 | PostgreSQL | All lasting state | | |
 | Redis | Job queue, rate-limit counters, locks | | Store anything that must survive a restart |
 | S3 / MinIO | All media files | | |
@@ -110,9 +110,8 @@ sequenceDiagram
     W->>A: POST /projects/:id/render
     A->>DB: Check all scenes ready and length ≤ 90 s, reserve credits, create render + job
     A-->>W: 202 {renderId}
-    WK->>R: POST /renders {timeline with presigned URLs, outputKey, callbackUrl}
+    WK->>R: POST /renders {timeline with presigned URLs, upload links}; then polls GET /renders/:id
     R->>S3: Download assets, render, upload MP4
-    R-->>WK: Callback (signed) with result; the task also polls as backup
     WK->>DB: Render ready (asset id), project status = rendered
     W->>A: GET /renders/:id → download URL
 ```
@@ -935,7 +934,7 @@ scripting ──script ready──► draft ──generate──► generating �
 ### Task design rules
 1. **Idempotent**: a task first checks if its output already exists (same `input_hash`); if so it links the existing asset and returns.
 2. **Retries**: provider calls use the prototype's `with_retry` and `with_fallback`. Celery-level retry only for infrastructure failures (database, S3).
-3. **Time limits**: soft and hard limits per queue (language models 4 minutes soft / 5 hard, voice 6 / 7 so ElevenLabs and then Edge both get their tries; AI video 12 minutes, render 10 minutes).
+3. **Time limits**: soft and hard limits per queue (language models 4 minutes soft / 5 hard, voice 6 / 7 so ElevenLabs and then Edge both get their tries; AI video 12 minutes, render 50 / 51 minutes on its own one-slot worker, under Redis's 1-hour redelivery timeout).
 4. **Cancellation**: deleting a project or scene marks its jobs `cancelled`; tasks check this before saving output.
 5. **Credits**: reserved when the job is created, refunded automatically on failure or cancellation.
 
@@ -1010,18 +1009,27 @@ Every AI provider also has an offline **mock** (from the prototype) used in loca
 
 ### Render service
 
-A small Node HTTP service (`apps/renderer`):
+A small Node HTTP service (`renderer/server.mjs`, its own Docker image; API design group K):
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | /renders | `{renderId, timeline, outputKey, callbackUrl}` → starts rendering |
-| GET | /renders/:id | progress |
+| POST | /renders | `{renderId, timeline, videoUploadUrl, thumbnailUploadUrl}` → starts rendering (or waits its turn) |
+| GET | /renders/:id | state and progress |
+| DELETE | /renders/:id | stops it |
+| GET | /health | ready once the bundle is built |
 
-- Asset `src` values in the timeline are presigned S3 URLs (valid 2 hours), so the renderer downloads directly from S3.
-- The bundle is built once at startup, not per render (fixes the prototype's per-render bundle copy).
-- On finish it uploads the MP4 to `outputKey` and calls the callback URL with a signed payload; the `render` task also polls as a backup.
-- Fonts are bundled with `@remotion/google-fonts` so output looks the same on Linux servers.
-- One render at a time per service instance; scale by adding instances, or switch the driver to **Remotion Lambda** later without changing the API.
+- The `render` job (worker queue `render`) checks that every file still exists (R-2), then replaces the snapshot's storage keys with links valid for 3 hours at storage's internal address, which the renderer can reach (browsers get links at the public address).
+- Each attempt gets its own two upload links (the MP4 and a JPEG cover image, the frame at 1 s), valid for 3 hours; a late upload from a stopped attempt can never replace the result, and files of failed attempts are deleted. The renderer uploads to them, so it never holds storage credentials. Its requests carry a shared secret (`RENDER_SERVICE_TOKEN`, compared in constant time; the service won't start without it), and it only downloads from or uploads to the origins in `RENDER_ALLOWED_ORIGINS` (storage), so a timeline can't make it fetch other addresses.
+- The worker polls every 2 s and saves the progress (one number for the job and the render) while the service is drawing. A service that refuses or answers 503 when asked to start (it is restarting) is asked again for about a minute. If the service then reports a failure, stops answering for about 30 s (the attempt is stopped there), or has restarted, the attempt is tried once more (R-1), but only if the time left is more than the first attempt took (plus a tenth). A start answered with 400 or 401 is not asked again. A render that runs out of time deletes its files. A cancelled job stops the render at the service and waits up to a minute for an upload under way to end before deleting the files.
+- Renders run on their own Celery worker (queue `render`, one at a time, like the service), so a long render never holds up other jobs. Time limit: 50 minutes soft, 51 hard; a queued render may wait up to 3 hours for its turn (other jobs 30 minutes).
+- Speed: on the development laptop a 1080x1920 render draws about 0.75 frames a second (a 29 s Reel took 20 minutes), so locally the service renders at 720x1280 (`RENDER_SCALE=2/3`); production renders 1080x1920 on bigger machines or Remotion Lambda (product decision, B5). E1 refuses Reels under 3 s (Instagram's minimum). Audio is AAC at 128 kbit/s.
+- Known gap: if the render worker restarts mid-render, the job stays `running` until the stuck-job sweeper fails it (about 53 minutes) while the service finishes a render nobody collects; the next render waits behind it, with its own time limit running.
+- Production render speed must be measured on the production host before launch (I2): a 90 s Reel at 1080x1920 needs about 0.9 frames a second to fit the time limit, 1.8 to leave room for the retry.
+- The bundle is built once at startup, not per render (fixes the prototype's per-render bundle copy). One render at a time per instance; the rest wait in order. Scale by adding instances, or switch the driver to **Remotion Lambda** later without changing the API.
+- Output: H.264 with AAC, CRF 20, at most 8 Mbit/s (R-5: a 90 s Reel stays under about 90 MB).
+- Fonts: the image installs Liberation (same widths as Arial) and Noto (other scripts and emoji), so captions match the preview closely. Bundling Google Fonts is a later improvement.
+- The player's `onMediaError` is never part of the timeline sent to the renderer: a file that fails to load fails the render with Remotion's own message.
+- Locally the service is `renderer` in Docker Compose (port 3100 on the host for checks). Tests use an offline stand-in (`RENDER_SERVICE_URL=mock`), which production refuses.
 
 ### Instagram (Instagram API with Instagram Login)
 

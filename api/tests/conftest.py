@@ -95,6 +95,7 @@ def make_settings(**overrides) -> Settings:
         "image_providers": "mock",
         "cloudflare_account_id": "",
         "cloudflare_api_token": "",
+        "render_service_url": "mock",
     }
     values.update(overrides)
     return Settings(**values)

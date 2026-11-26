@@ -44,6 +44,10 @@ def create_app(settings: Settings | None = None) -> Flask:
             "task_default_queue": "default",
             "task_acks_late": True,
             "worker_prefetch_multiplier": 1,
+            # A task not finished in this time is delivered again; it must outlast a render.
+            "broker_transport_options": {
+                "visibility_timeout": max(3600, settings.render_time_limit_seconds + 600)
+            },
             "broker_connection_retry_on_startup": True,
             # Housekeeping, run by the worker's built-in scheduler (celery beat).
             "beat_schedule": {
@@ -100,9 +104,18 @@ def create_app(settings: Settings | None = None) -> Flask:
     )
 
     from . import tasks  # noqa: F401 - registers the Celery tasks
-    from .routes import auth, catalogue, jobs_credits, me, projects, scenes, system
+    from .routes import auth, catalogue, jobs_credits, me, projects, renders, scenes, system
 
-    for blueprint in (system.bp, auth.bp, me.bp, projects.bp, scenes.bp, jobs_credits.bp, catalogue.bp):
+    for blueprint in (
+        system.bp,
+        auth.bp,
+        me.bp,
+        projects.bp,
+        scenes.bp,
+        jobs_credits.bp,
+        catalogue.bp,
+        renders.bp,
+    ):
         app.register_blueprint(blueprint, url_prefix=API_PREFIX + (blueprint.url_prefix or ""))
     register_cli(app)
     return app

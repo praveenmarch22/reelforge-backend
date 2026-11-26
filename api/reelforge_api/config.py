@@ -87,6 +87,15 @@ class Settings(BaseSettings):
     cloudflare_api_token: str = Field(default="", repr=False)
     cloudflare_image_model: str = "@cf/black-forest-labs/flux-1-schnell"
 
+    # The render service (milestone B5): its address, and the shared secret its requests carry.
+    # "mock" makes a tiny stand-in file offline (tests); production refuses it.
+    render_service_url: str = "mock"
+    render_service_token: str = Field(default="", repr=False)
+    # A render job's time limit in seconds (soft; the hard limit is a minute later). A 90 s Reel
+    # must fit, retry included where possible: measure the host's speed (technical design,
+    # "Render service"). Redis's redelivery timeout is set above it.
+    render_time_limit_seconds: int = Field(default=3000, ge=300, le=4 * 3600)
+
     # How background jobs are started. "celery": sent to the worker. "manual": kept in a list
     # for tests to run one by one. Empty = manual in the test environment, celery elsewhere.
     job_dispatch: Literal["celery", "manual"] | None = None
@@ -124,6 +133,14 @@ class Settings(BaseSettings):
                 raise ValueError("S3_SECRET_KEY must not be the development default in production")
             if "mock" in self.llm_provider_names:
                 raise ValueError("LLM_PROVIDERS must not include the mock in production")
+            if (
+                not self.render_service_url.startswith(("http://", "https://"))
+                or len(self.render_service_token) < 32
+                or self.render_service_token.startswith("dev-only")
+            ):
+                raise ValueError(
+                    "RENDER_SERVICE_URL and a long random RENDER_SERVICE_TOKEN must be set in production"
+                )
             if "mock" in self.voice_provider_names:
                 raise ValueError("VOICE_PROVIDERS must not include the mock in production")
             if "mock" in self.stock_provider_names or "mock" in self.image_provider_names:

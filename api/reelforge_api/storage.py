@@ -81,9 +81,32 @@ class Storage:
     def delete(self, key: str) -> None:
         self.client.delete_object(Bucket=self.bucket, Key=key)
 
-    def presigned_get(self, key: str, expires_seconds: int = 7200) -> str:
+    def size(self, key: str) -> int:
+        return int(self.client.head_object(Bucket=self.bucket, Key=key)["ContentLength"])
+
+    def presigned_get(self, key: str, expires_seconds: int = 7200, *, download_name: str = "") -> str:
+        """A link the browser can read. With `download_name` the browser saves the file under
+        that name instead of playing it."""
+        params = {"Bucket": self.bucket, "Key": key}
+        if download_name:
+            params["ResponseContentDisposition"] = f'attachment; filename="{download_name}"'
         return self.presign_client.generate_presigned_url(
+            "get_object", Params=params, ExpiresIn=expires_seconds
+        )
+
+    def internal_get(self, key: str, expires_seconds: int = 7200) -> str:
+        """A read link at storage's internal address, for services inside the private network
+        (the render service), which may not reach the address browsers use."""
+        return self.client.generate_presigned_url(
             "get_object", Params={"Bucket": self.bucket, "Key": key}, ExpiresIn=expires_seconds
+        )
+
+    def internal_put(self, key: str, content_type: str, expires_seconds: int = 7200) -> str:
+        """An upload link at storage's internal address (see internal_get)."""
+        return self.client.generate_presigned_url(
+            "put_object",
+            Params={"Bucket": self.bucket, "Key": key, "ContentType": content_type},
+            ExpiresIn=expires_seconds,
         )
 
     def presigned_put(self, key: str, content_type: str, expires_seconds: int = 900) -> str:

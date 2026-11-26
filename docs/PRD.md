@@ -516,7 +516,7 @@ Credits balance = sum of the ledger, so every change is traceable.
 | R-1 | Render fails | Retry once automatically; then fail with a reason; refund credits. |
 | R-2 | An asset URL is missing or expired at render time | Check all assets before starting; re-sign URLs. |
 | R-3 | Creator edits while a render is running | The render uses the timeline version it started with; the result is marked outdated if the timeline changed. |
-| R-4 | Several renders at once from one user | Limit to one active render per user; queue the rest. |
+| R-4 | Several renders at once from one user | Limit to one active render per user: a second one is refused until the first ends (B5). Different users' renders wait their turn. |
 | R-5 | Output file too large for Instagram | Use a target bitrate that keeps 90 seconds well under Instagram's limit. |
 
 ### 11.7 Instagram

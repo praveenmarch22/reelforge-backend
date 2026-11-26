@@ -1,14 +1,14 @@
 # ReelForge: project status
 
-**Last updated:** 2026-11-25
+**Last updated:** 2026-11-26
 
 This is the single place to see where the project stands. It is updated at the end of every working session. The milestone definitions are in [MILESTONES.md](MILESTONES.md).
 
 ## Where we are
 
-**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend is built one task at a time: B1 (setup), B2 (accounts) and B3 (projects, scripts, scenes, jobs and credits) are done, and so is B4 (generation: voiceovers, visuals, music, Generate Reel and the preview timeline), each reviewed by QA and covered by automated tests (1380 backend tests). Scripts are written by real AI models (Gemini, with Groq as backup); voiceovers by ElevenLabs, with the free Edge voices as backup; visuals are Pixabay stock clips and FLUX images on Cloudflare; music comes from a 15-track CC BY library.**
+**Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend is built one task at a time: B1 (setup), B2 (accounts) and B3 (projects, scripts, scenes, jobs and credits) are done, and so are B4 (generation: voiceovers, visuals, music, Generate Reel and the preview timeline) and B5 (rendering the final MP4 with a Remotion render service), each reviewed by QA and covered by automated tests. Scripts are written by real AI models (Gemini, with Groq as backup); voiceovers by ElevenLabs, with the free Edge voices as backup; visuals are Pixabay stock clips and FLUX images on Cloudflare; music comes from a 15-track CC BY library.**
 
-Next up: **B5 rendering** (the render service turns the timeline into an MP4), then **F7** (render and publish screens). F5 (New Reel, Script editor) and F6 (Reel editor with the live preview) are done and talk to the real backend (`npm run dev:real`): a Reel can be written, generated, previewed and edited on screen and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
+Next up: **F7** (render and publish screens), then **B6** (Instagram publishing, needs a Meta app). F5 (New Reel, Script editor) and F6 (Reel editor with the live preview) are done and talk to the real backend (`npm run dev:real`): a Reel can be written, generated, previewed and edited on screen and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
 
 ## Milestones
 
@@ -31,7 +31,8 @@ Next up: **B5 rendering** (the render service turns the timeline into an MP4), t
 | B2 | Accounts | Done | Sign-up with email verification, login, 30-day sessions, password reset, profile, change password, delete account (API A1-A12). QA reviewed; both rule decisions made |
 | B3 | Projects, scripts and jobs | Done | API B1–B10, C1–C6, G, H; language models (Gemini, Groq, offline mock); credits reserved, refunded and reset monthly. QA verdict was fail (a credit race); fixed and retested. See [FIX_LOG_B3.md](docs/qa/FIX_LOG_B3.md) |
 | B4 | Generation | Done: voice (C7, D3), visuals (C8–C10), music (D4), Generate (B11), timeline (B12) | Three slices: 1 voice (ElevenLabs, Edge TTS backup), 2 visuals (Pexels stock, Cloudflare FLUX images), 3 music, Generate Reel (B11) and timeline (B12). Tester and QA after each slice |
-| B5–B8 | Backend features | Not started | Built one task at a time, each agreed with the product owner first |
+| B5 | Rendering | Done | API E1–E3; a Remotion render service in Docker (`renderer/server.mjs`) and its own render worker. A real Reel rendered end to end. Local renders are 720x1280 (slow laptop), production 1080x1920. QA: fail, then pass with issues; all fixed but one known gap. See [FIX_LOG_B5.md](docs/qa/FIX_LOG_B5.md) |
+| B6–B8 | Backend features | Not started | Built one task at a time, each agreed with the product owner first |
 | I1–I3 | Integration and launch | Not started | |
 
 ## What exists today
@@ -171,6 +172,9 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 | 2026-11-25 | F5 and F6 are built against the real local backend (Vite's proxy to the Docker API), not the mock; the mock stays for the older screens' unit tests. Most of milestone I1 happens here |
 | 2026-11-25 | The editor's preview uses a copy of the renderer's Reel components inside the web app, with a check that fails if the copies differ (answers open question 3) |
 | 2026-11-25 | F5 and F6 are each reviewed by the Tester and QA and committed before the next; the screens follow Stitch screens 9 to 11, without the invented labels listed in the UI review |
+| 2026-11-26 | B5 rendering: the render service runs as a Docker container in the same Compose stack (Linux, like production). The worker starts each render and polls the service for progress (no callback). Creators are told in the app only for now; email is later (PRD R4 email is P1) |
+| 2026-11-26 | Render speed: the development laptop draws about 0.75 frames a second at 1080x1920 (a 29 s Reel took 20 minutes), so local renders are 720x1280 (`RENDER_SCALE=2/3`) and production renders 1080x1920 on bigger machines or Remotion Lambda. Production speed is measured on its host before launch, and the render time limit (`RENDER_TIME_LIMIT_SECONDS`) is set from it |
+| 2026-11-26 | One active render per user (a second is refused with 409); different users' renders queue on a one-slot render worker. Reels under 3 s are refused (Instagram's minimum). Audio is AAC 128 kbit/s |
 | 2026-11-17 | Two public GitHub repositories under praveenmarch22: [reelforge-frontend](https://github.com/praveenmarch22/reelforge-frontend) (web app) and [reelforge-backend](https://github.com/praveenmarch22/reelforge-backend) (backend, all documents, milestones and this status document). Commits use GitHub's private no-reply email |
 
 ## Open questions
@@ -178,7 +182,7 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 | # | Question | Needed by |
 |---|---|---|
 | 1 | Backend: what you want from each task. B2 Accounts is next | Before each backend task |
-| 2 | Render capacity on AWS | B5 / I2 |
+| 2 | Render capacity on AWS: measure frames per second on the production host; bigger machines or Remotion Lambda | I2 |
 | 4 | In-app notifications (bell icon in the designs) are left out until render and publish exist | F7 |
 | 5 | Landing page at `/` (PRD flow 1 step 1): it is in no milestone. Build one, or keep sending visitors straight to login? | Before launch |
 | 6 | Unverified users can browse the app with a "verify your email" banner (creating is blocked). Keep that, or lock them to the verify screen? | F5 |
@@ -187,7 +191,10 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 
 ## Known gaps and differences from the designs
 
-- Reel thumbnails are generated gradients until real renders exist.
+- Reel thumbnails are generated gradients in the mock-API screens; the real API now returns the cover of the latest render (B5).
+- B5 known gap: if the render worker restarts mid-render, the job stays running until the stuck-job sweep fails it.
+- B5: renders are slow on the development laptop (about 17 minutes for a 29 s Reel at 720x1280).
+- B5: captions in renders use Liberation Sans (Arial's metrics) rather than Arial Black; bundling the fonts is a later improvement.
 - Decorative labels Stitch invented ("ENGINE V4.2", GPU figures, "PRO TIER", the Trending Audio strip) are intentionally left out, as listed in the UI review.
 - The sidebar has Home, Projects, Settings (and Admin for admins); the Music item from the designs is removed.
 - Screens not built yet show a "not built yet" placeholder with their milestone number.
@@ -212,3 +219,4 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 | 2026-11-25 | B4 slice 3 built: music library (15 tracks, `flask music-seed`), Generate Reel (B11), timeline (B12), music list (D4). A real 5-scene Reel generated in 26 s for 2 credits. QA found 6 issues and the Tester 1 bug over two rounds; all fixed. B4 complete. 1380 backend tests |
 | 2026-11-26 | Frontend F5 built against the real backend: New Reel (ideas, topic or pasted script, settings) and the Script editor (autosaved scenes, rewrites, reorder, hooks, Shorten with AI, Generate). Designs read from Stitch through Chrome. QA found 22 issues and the Tester 12 bugs over four rounds; all fixed but one deferred to F9. 530 frontend unit tests, 26 real-backend browser tests |
 | 2026-11-26 | Frontend F6 built: the Reel editor with a live Remotion preview (a copy of the renderer's drawing code, checked identical by a test), scene list, inspector (visual, voice, text), stock search, audio bar. Renderer accepts voiceless scenes, trims and a preview-only media error hook. QA found 19 issues and the Tester 12 bugs over four rounds (one backend: a failed voice's reason kept); all fixed but two deferred to F9. 622 frontend unit tests, 24 real-backend editor browser tests |
+| 2026-11-26 | Backend B5 built: the render service (Remotion in Docker, token and storage-only links), render jobs with one retry, a separate render worker, API E1–E3, latest render and cover in the project JSON. A real 29 s Reel rendered end to end (20 min at 1080x1920; 17 min at 720x1280). QA found 2 Major and 18 smaller issues over two rounds, the Tester 4 bugs; all fixed but one known gap. Render speed decided: 720p locally |

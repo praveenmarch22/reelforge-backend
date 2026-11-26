@@ -10,9 +10,9 @@ This repository holds the backend and all project documents. The web app is in [
 
 ```
 ├── api/                 Flask API and Celery worker (B1 foundations, B2 accounts)
-├── docker-compose.yml   local stack: Postgres, Redis, MinIO, Mailpit, API, worker
+├── docker-compose.yml   local stack: Postgres, Redis, MinIO, Mailpit, API, workers, render service
 ├── pipeline/            Python generation prototype: topic → script → voiceover → visuals → timeline
-├── renderer/            Remotion prototype: timeline → vertical MP4
+├── renderer/            Render service (server.mjs, Docker): timeline → vertical MP4 with Remotion
 ├── docs/                PRD, design documents, database schema, QA documents
 ├── MILESTONES.md
 ├── PROJECT_STATUS.md
@@ -33,6 +33,7 @@ The first start takes a few minutes. It creates the database from the migrations
 |---|---|
 | API | http://localhost:5000/api/v1 (try `/api/v1/health`) |
 | Test inbox (every email the API sends) | http://localhost:8025 |
+| Render service health (renders at 720x1280 locally) | http://localhost:3100/health |
 | MinIO console (file storage) | http://localhost:9001, user `reelforge-dev`, password `reelforge-dev-secret` (local only) |
 | Postgres | `localhost:54320`, database, user and password all `reelforge` (local only) |
 | Redis | `localhost:63790` |

@@ -42,6 +42,12 @@ x-api-env: &api-env
   IMAGE_PROVIDERS: ${IMAGE_PROVIDERS:-cloudflare}
   CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
   CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+  # The render service below; the worker starts renders there and polls their progress.
+  RENDER_SERVICE_URL: ${RENDER_SERVICE_URL:-http://renderer:3000}
+  RENDER_SERVICE_TOKEN: dev-only-render-token
+  # A developer's machine draws about 0.85 frames a second at 720x1280, so a 90 s Reel needs
+  # about 53 minutes: 90 minutes allowed locally (production keeps its measured default).
+  RENDER_TIME_LIMIT_SECONDS: ${RENDER_TIME_LIMIT_SECONDS:-5400}
 
 services:
   postgres:
@@ -125,7 +131,7 @@ services:
     environment: *api-env
     # -B also runs the scheduler for the daily housekeeping tasks. In real environments the
     # scheduler is its own single process, so two workers never both schedule the same task.
-    command: celery -A wsgi:celery_app worker -B -s /tmp/celerybeat-schedule --loglevel INFO --concurrency 2 -Q default,llm,voice,visuals,ai_video,render,publish,maintenance
+    command: celery -A wsgi:celery_app worker -B -s /tmp/celerybeat-schedule --loglevel INFO --concurrency 2 -Q default,llm,voice,visuals,ai_video,publish,maintenance
     volumes:
       - ./api:/app
     depends_on:
@@ -137,6 +143,39 @@ services:
       timeout: 15s
       retries: 5
       start_period: 20s
+
+  render-worker:
+    # Renders only, one at a time like the render service, so a long render never holds up
+    # other jobs (QB5-002). Its tasks mostly wait for the service.
+    build: ./api
+    environment: *api-env
+    command: celery -A wsgi:celery_app worker -n render@%h --loglevel INFO --concurrency 1 --prefetch-multiplier 1 -Q render
+    volumes:
+      - ./api:/app
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      # Answers while a render runs: Celery replies from its main process, not the busy slot.
+      test: ["CMD-SHELL", "celery -A wsgi:celery_app inspect ping -d render@$$HOSTNAME --timeout 5"]
+      interval: 15s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+
+  renderer:
+    # Turns a timeline into the finished MP4 with Remotion (headless Chrome and FFmpeg).
+    # It downloads files from storage at its internal address and uploads the result to
+    # links made for each render, so it holds no storage keys.
+    build: ./renderer
+    shm_size: 1gb # Chrome needs more shared memory than Docker's 64 MB default
+    environment:
+      RENDER_SERVICE_TOKEN: dev-only-render-token
+      # Local renders come out at 720x1280, about twice as fast; production renders 1080x1920.
+      RENDER_SCALE: "${RENDER_SCALE:-2/3}"
+      # Only files from local storage are downloaded or uploaded to (QB5-008).
+      RENDER_ALLOWED_ORIGINS: http://minio:9000
+    ports:
+      - "127.0.0.1:${RENDERER_PORT:-3100}:3000"
 
 volumes:
   postgres-data:

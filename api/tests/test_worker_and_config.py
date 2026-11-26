@@ -84,8 +84,10 @@ PRODUCTION = {
     "cookie_secure": None,
     # The container's environment says LLM_PROVIDERS=mock, which production refuses.
     "llm_providers": "gemini,groq",
+    "render_service_url": "http://renderer.internal:3000",
+    "render_service_token": "Vd6tKs2wQm9xLp4h" * 2,
 }
-SECRETS = ("secret_key", "database_url", "s3_secret_key", "smtp_password")
+SECRETS = ("secret_key", "database_url", "s3_secret_key", "smtp_password", "render_service_token")
 
 
 def shows_part_of(text: str, secret: str, length: int = 6) -> bool:

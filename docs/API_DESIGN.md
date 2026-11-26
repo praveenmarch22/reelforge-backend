@@ -77,6 +77,7 @@ Of the 52 creator-facing endpoints, 49 are needed for version 1 (P0) and 3 are P
 | 409 | `no_script` | Hook suggestions for a project that has no scenes yet |
 | 409 | `not_ready` | Render with scenes not ready; `details.scenes` |
 | 409 | `too_long` | Timeline over 90 s; `details.seconds` |
+| 409 | `too_short` | Timeline under 3 s (Instagram's minimum); `details.seconds` |
 | 409 | `render_outdated` | Publishing a render older than the current timeline (allowed with `"confirmOutdated": true`) |
 | 409 | `already_posted` | This render already has a live post |
 | 409 | `instagram_not_connected` | |
@@ -143,10 +144,12 @@ When `state` is `failed`, `error` is `{"code", "message"}`; the message is plain
 
 **Render**
 ```json
-{"id": "…", "state": "succeeded", "progress": 100, "timelineVersion": 4, "outdated": false,
- "video": {"url": "https://…", "durationSeconds": 31.4, "sizeBytes": 9420311}, "thumbnailUrl": "https://…",
- "error": null, "createdAt": "…"}
+{"id": "…", "projectId": "…", "jobId": "…", "state": "succeeded", "progress": 100, "timelineVersion": 4,
+ "outdated": false,
+ "video": {"url": "https://…", "downloadUrl": "https://…", "durationSeconds": 31.4, "sizeBytes": 9420311},
+ "thumbnailUrl": "https://…", "error": null, "createdAt": "…", "finishedAt": "…"}
 ```
+`state`: `queued`, `running`, `succeeded`, `failed` or `cancelled`. `video` and `thumbnailUrl` are set once it succeeded; the links are valid for 2 hours, and `downloadUrl` makes the browser save the file (named after the Reel's title) instead of playing it. `outdated` is true once the Reel was edited after this render's timeline version. When `failed`, `error` is `{"code", "message"}` with the job's code (`media_missing`, `render_failed`, `timed_out`, …). The project's `latestRender` is the newest render in any state, and its `thumbnailUrl` is the cover of its latest finished render.
 
 **Post**
 ```json
@@ -298,13 +301,15 @@ While the project's script is being written (status `scripting`), C1–C6 answer
 
 ### E. Rendering (3)
 
-**E1. `POST /projects/:id/render`**: Verified, **idempotent**. `202` → `{"render": Render, "creditsReserved": 2}`.
-- Errors: `409 not_ready` (`details.scenes`), `409 too_long`, `409 already_running`, `402`.
-- Uses the current timeline version; the snapshot is stored with the render.
+**E1. `POST /projects/:id/render`**: Verified, **idempotent**. `202` → `{"render": Render, "job": Job, "creditsReserved": 2, "balance"}`.
+- Errors, checked in this order: `409 not_ready` (the script is being written, the Reel is generating, it has no scenes, or a scene's voice or visual isn't ready; `details.scenes` lists those scenes), `409 too_long` (over 90 s), `409 too_short` (under 3 s, Instagram's minimum), `409 already_running` (this Reel is rendering or posting, or another of the user's Reels is rendering: R-4), `402`.
+- Uses the current timeline version; the snapshot (storage keys) is stored with the render. Edits made while it renders don't change it; the finished render is then `outdated` (R-3).
+- The project is `rendering` until the job ends, then `rendered`; or `render_failed` (credits refunded); if the render is cancelled it goes back to the status it had; and if it was edited meanwhile, `ready` or `draft` as after any edit.
+- A failed attempt is retried once automatically (R-1). The job's error codes add `media_missing` (a file the Reel uses is gone; generate the scenes again) and `render_failed`. Cancelling the job (G3) stops the render.
 
-**E2. `GET /renders/:id`**: User. `200` → `{"render": Render}`. Polled while `state` is `queued` or `running`.
+**E2. `GET /renders/:id`**: User. `200` → `{"render": Render}`. Polled while `state` is `queued` or `running`. `404` for another user's render or one of a deleted project.
 
-**E3. `GET /projects/:id/renders`**: User. `200` → `{"items": [Render]}`, newest first (render history).
+**E3. `GET /projects/:id/renders`**: User. `200` → `{"items": [Render]}`, newest first (render history, the latest 50).
 
 ### F. Instagram and posts (6)
 
@@ -374,17 +379,18 @@ All require **Admin**. Every change is logged with the admin's id.
 
 Every response, including errors, carries an `X-Request-ID` header; the same id is on every log line for that request. A caller may send its own `X-Request-ID` (letters, digits, `.`, `_`, `-`, up to 64 characters); anything else is replaced.
 
-**J2. `POST /internal/renders/:id/callback`**: Internal (render service only). Header `X-Signature`: HMAC-SHA256 of the body with a shared secret. Body: `{"state": "succeeded"|"failed", "outputKey", "durationSeconds", "sizeBytes", "error"}`. `204`. Not exposed through the public load balancer.
+**J2. `POST /internal/renders/:id/callback`**: Not built: the worker polls the render service instead (B5 decision). Was: Internal (render service only). Header `X-Signature`: HMAC-SHA256 of the body with a shared secret. Body: `{"state": "succeeded"|"failed", "outputKey", "durationSeconds", "sizeBytes", "error"}`. `204`. Not exposed through the public load balancer.
 
 ### K. Render service (3, internal Node service)
 
-Reachable only from the workers' private network; requests carry the shared secret.
+Reachable only from the workers' private network. Every request except K3 carries `Authorization: Bearer <RENDER_SERVICE_TOKEN>`; others get `401`. The worker starts a render and polls it (there is no callback, B5 decision).
 
 | # | Endpoint | Purpose |
 |---|---|---|
-| K1 | `POST /renders` | Body: `{"renderId", "timeline" (with presigned URLs), "outputKey", "thumbnailKey", "callbackUrl"}` → `202 {"renderId"}`. One render at a time per instance; `429` if busy |
-| K2 | `GET /renders/:id` | `{"state", "progress", "error"}`, used by the worker as a backup to the callback |
-| K3 | `GET /health` | `{"status": "ok", "busy": false, "remotionVersion": "4.0.530"}` |
+| K1 | `POST /renders` | Body: `{"renderId", "timeline" (with links to download each file), "videoUploadUrl", "thumbnailUploadUrl"}` (upload links made for this attempt, so the service holds no storage keys; every link must be at an origin in `RENDER_ALLOWED_ORIGINS`, else `400`) → `202 {"state", "progress", "error"}`. Renders run one at a time per instance; the rest wait in order. The same `renderId` again answers with its status instead of starting it twice |
+| K2 | `GET /renders/:id` | `{"state" (queued, running, succeeded, failed, cancelled), "progress", "error", "sizeBytes", "durationSeconds"}`. `404` once the service no longer knows it (kept for 1 hour after it ends, lost on restart) |
+| K2b | `DELETE /renders/:id` | Stops it: a waiting render is dropped, a running one is `cancelling` until drawing and any upload under way have stopped, then `cancelled`; the worker waits for that before deleting the files |
+| K3 | `GET /health` | `{"status": "ok", "busy": false, "waiting": 0, "remotionVersion": "4.0.530"}`; `503 {"status": "starting"}` while the bundle is built |
 
 ---
 

@@ -98,6 +98,12 @@ def after_edit(project: Project, *, force: bool = False) -> None:
     project.timeline_version = Project.timeline_version + 1
     if project.status in ("scripting", "generating", "rendering", "posting"):
         return
+    settle_status(project, force=force)
+
+
+def settle_status(project: Project, *, force: bool = False) -> None:
+    """Works out a generated project's status from its scenes: ready if every voice and visual
+    is ready, else draft. Also used when a render ends after the Reel was edited (B5)."""
     scenes = project.scenes
     # A draft counts as generated once any scene has a file: it can become ready again
     # after a voice that failed is redone (QB4-014).
@@ -299,9 +305,26 @@ def _progress(
     if project.status == "generating":
         done, total = scene_counts or (0, 0)
         return round(100 * done / total) if total else 0
-    if project.status in ("rendering", "posting"):
-        return 0  # the render and post progress arrive with milestones B5 and B6
+    if project.status == "rendering":
+        return (
+            db.session.execute(
+                select(Job.progress).where(
+                    Job.project_id == project.id, Job.type == "render", Job.state.in_(jobs_module.ACTIVE)
+                )
+            ).scalar()
+            or 0
+        )
+    if project.status == "posting":
+        return 0  # the post's progress arrives with milestone B6
     return None
+
+
+def _thumbnail(project: Project) -> str | None:
+    """The cover image of the Reel's latest finished render (B5)."""
+    if project.thumbnail_asset_id is None:
+        return None
+    asset = db.session.get(Asset, project.thumbnail_asset_id)
+    return get_storage().presigned_get(asset.s3_key) if asset is not None else None
 
 
 def summary_json(project: Project, script_progress: int | None = None,
@@ -315,7 +338,7 @@ def summary_json(project: Project, script_progress: int | None = None,
         "durationSeconds": round(project.timeline["durationInFrames"] / project.timeline["fps"], 2)
         if project.timeline
         else None,
-        "thumbnailUrl": None,  # from the render, milestone B5
+        "thumbnailUrl": _thumbnail(project),
         "progress": _progress(project, script_progress, scene_counts),
         "updatedAt": _iso(project.updated_at),
     }
@@ -350,10 +373,17 @@ def project_json(project: Project) -> dict[str, Any]:
         "hashtags": project.hashtags,
         "scenes": [scene_json(s) for s in scenes],
         "activeJobs": jobs_module.jobs_json(active),
-        "latestRender": None,  # milestone B5
+        "latestRender": _latest_render(project),
         "latestPost": None,  # milestone B6
         "createdAt": _iso(project.created_at),
     }
+
+
+def _latest_render(project: Project) -> dict[str, Any] | None:
+    from .renders import latest_render, render_json
+
+    render = latest_render(project)
+    return render_json(render, project) if render is not None else None
 
 
 def estimate(project: Project) -> dict[str, Any]:

@@ -36,15 +36,32 @@ log = logging.getLogger(__name__)
 ACTIVE = ("queued", "running")
 QUEUES = {
     "ideas": "llm", "script": "llm", "rewrite_scene": "llm", "hooks": "llm", "caption": "llm",
-    "voice": "voice", "visual": "visuals",
+    "voice": "voice", "visual": "visuals", "render": "render",
 }  # fmt: skip
 # A job running longer than this is treated as stuck and failed (task design rule 3).
-TIME_LIMITS = {"llm": timedelta(minutes=5), "voice": timedelta(minutes=7), "visuals": timedelta(minutes=7)}
+TIME_LIMITS = {
+    "llm": timedelta(minutes=5), "voice": timedelta(minutes=7), "visuals": timedelta(minutes=7),
+}  # fmt: skip
 # Celery's (soft, hard) limits in seconds per queue. A voice job may try ElevenLabs three
 # times and then Edge three times, with waits for rate limits, before it gives up.
-TASK_LIMITS = {"llm": (240, 300), "voice": (360, 420), "visuals": (360, 420)}
-# A job still queued after this long means no worker is taking it.
+# Renders have their own worker that takes one at a time, so a render's clock starts when the
+# service starts drawing it. A 90 s Reel takes about 30 minutes on a developer's machine at
+# 720x1280 (QB5-001). The limits stay under Redis's 1-hour redelivery timeout.
+TASK_LIMITS = {"llm": (240, 300), "voice": (360, 420), "visuals": (360, 420)}  # render: task_limits()
+
+
+def task_limits(queue: str) -> tuple[int, int]:
+    """Celery's (soft, hard) limits for a queue; a render's come from the settings."""
+    if queue == "render":
+        soft = current_app.extensions["settings"].render_time_limit_seconds
+        return soft, soft + 60
+    return TASK_LIMITS.get(queue, TASK_LIMITS["llm"])
+
+
+# A job still queued after this long means no worker is taking it. Renders wait in turn for the
+# one render worker, so theirs is longer (QB5-002).
 QUEUED_LIMIT = timedelta(minutes=30)
+QUEUED_LIMITS = {"render": timedelta(hours=3)}
 
 # Filled when job dispatch is "manual" (tests): job ids waiting to be run by run_manual_queue().
 manual_queue: list[str] = []
@@ -57,6 +74,8 @@ MESSAGES = {
     "timed_out": "This took too long and was stopped. Please try again.",
     "stock_unavailable": "That clip is no longer available. Pick another one.",
     "no_stock_match": "No stock clip fits this scene. Try other search words, or switch it to an AI image.",
+    "media_missing": "A file this Reel uses is missing. Generate the scenes again, then render.",
+    "render_failed": "The video couldn't be made. Please try again.",
     "queue_unavailable": "We couldn't start this. Please try again in a moment.",
     "internal_error": "Something went wrong on our side. Please try again.",
 }
@@ -140,7 +159,7 @@ def dispatch(jobs: list[Job]) -> None:
 
         try:
             queue = QUEUES.get(job.type, "default")
-            soft, hard = TASK_LIMITS.get(queue, TASK_LIMITS["llm"])
+            soft, hard = task_limits(queue)
             result = run_job.apply_async(
                 args=[str(job.id)], queue=queue, soft_time_limit=soft, time_limit=hard
             )
@@ -332,10 +351,14 @@ def fail_stuck() -> int:
     stuck: list[uuid.UUID] = []
     for job in db.session.execute(select(Job).where(Job.state.in_(ACTIVE))).scalars():
         if job.state == "running" and job.started_at:
-            limit = TIME_LIMITS.get(QUEUES.get(job.type, "default"), timedelta(minutes=15))
+            queue = QUEUES.get(job.type, "default")
+            if queue == "render":
+                limit = timedelta(seconds=task_limits("render")[1] + 60)
+            else:
+                limit = TIME_LIMITS.get(queue, timedelta(minutes=15))
             if now() - job.started_at > limit + timedelta(minutes=1):
                 stuck.append(job.id)
-        elif job.state == "queued" and now() - job.queued_at > QUEUED_LIMIT:
+        elif job.state == "queued" and now() - job.queued_at > QUEUED_LIMITS.get(job.type, QUEUED_LIMIT):
             stuck.append(job.id)
     db.session.rollback()
     for job_id in stuck:

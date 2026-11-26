@@ -8,7 +8,7 @@ This is the single place to see where the project stands. It is updated at the e
 
 **Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend is built one task at a time: B1 (setup), B2 (accounts) and B3 (projects, scripts, scenes, jobs and credits) are done, and so is B4 (generation: voiceovers, visuals, music, Generate Reel and the preview timeline), each reviewed by QA and covered by automated tests (1380 backend tests). Scripts are written by real AI models (Gemini, with Groq as backup); voiceovers by ElevenLabs, with the free Edge voices as backup; visuals are Pixabay stock clips and FLUX images on Cloudflare; music comes from a 15-track CC BY library.**
 
-Next up: the frontend **F5 (New Reel and script editor) and F6 (editor with the live preview)** against the real backend, so a Reel can be made on screen end to end; then **B5 rendering** and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
+Next up: the frontend **F6 (Reel editor with the live preview)** against the real backend; then **B5 rendering**. F5 (New Reel and Script editor) is done and talks to the real backend (`npm run dev:real`) and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
 
 ## Milestones
 
@@ -22,7 +22,7 @@ Next up: the frontend **F5 (New Reel and script editor) and F6 (editor with the 
 | F2 | Sign-in screens | Done | QA reviewed; covered by automated tests |
 | F3 | App shell, dashboard and projects | Done | QA reviewed; covered by automated tests. Seed data has 6 of the 11 statuses; the rest arrive with F5-F7 |
 | F4 | Onboarding | Done | QA reviewed; covered by automated tests. See "F4 result" below |
-| F5 | New Reel and script editor | Not started | |
+| F5 | New Reel and script editor | Done | Against the real backend (`npm run dev:real`); four review rounds |
 | F6 | Reel editor | Not started | Largest frontend milestone |
 | F7 | Render and publish | Not started | |
 | F8 | Settings, credits and admin | Not started | |
@@ -168,6 +168,9 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 | 2026-11-25 | When no stock clip fits a scene, the AI image used instead is not charged (the Workers AI free allowance covers it) |
 | 2026-11-25 | Music library: 15 tracks by Kevin MacLeod (incompetech.com, CC BY 4.0), 1 to 4 per mood, approved by the product owner and filled by `flask music-seed`. A posted Reel credits its track in the caption, like the ElevenLabs line (milestone B6) |
 | 2026-11-25 | Generate runs every scene's voice and visual side by side (visuals fitted to the estimated length) rather than visuals after voices: faster, and the renderer fits clips to the real voice length |
+| 2026-11-25 | F5 and F6 are built against the real local backend (Vite's proxy to the Docker API), not the mock; the mock stays for the older screens' unit tests. Most of milestone I1 happens here |
+| 2026-11-25 | The editor's preview uses a copy of the renderer's Reel components inside the web app, with a check that fails if the copies differ (answers open question 3) |
+| 2026-11-25 | F5 and F6 are each reviewed by the Tester and QA and committed before the next; the screens follow Stitch screens 9 to 11, without the invented labels listed in the UI review |
 | 2026-11-17 | Two public GitHub repositories under praveenmarch22: [reelforge-frontend](https://github.com/praveenmarch22/reelforge-frontend) (web app) and [reelforge-backend](https://github.com/praveenmarch22/reelforge-backend) (backend, all documents, milestones and this status document). Commits use GitHub's private no-reply email |
 
 ## Open questions
@@ -176,7 +179,6 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 |---|---|---|
 | 1 | Backend: what you want from each task. B2 Accounts is next | Before each backend task |
 | 2 | Render capacity on AWS | B5 / I2 |
-| 3 | How the frontend gets the shared Remotion video components now that the renderer is in a separate repository (small package, or copy on release) | F6 |
 | 4 | In-app notifications (bell icon in the designs) are left out until render and publish exist | F7 |
 | 5 | Landing page at `/` (PRD flow 1 step 1): it is in no milestone. Build one, or keep sending visitors straight to login? | Before launch |
 | 6 | Unverified users can browse the app with a "verify your email" banner (creating is blocked). Keep that, or lock them to the verify screen? | F5 |
@@ -208,3 +210,4 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 | 2026-11-25 | ElevenLabs key added. B4 slice 1 built: voiceovers per scene (C7), voice list (D3), Idempotency-Key. QA found 16 issues and the Tester 6 bugs over three rounds; all fixed. Voice pricing and the ElevenLabs credit line decided. 1090 backend tests |
 | 2026-11-25 | Pexels paused new keys, so Pixabay is the stock source; Pixabay and Cloudflare keys added. B4 slice 2 built: visuals per scene (C8), stock search (C9), choosing a visual (C10). QA found 12 issues and the Tester 2 bugs over three rounds; all fixed. 1291 backend tests |
 | 2026-11-25 | B4 slice 3 built: music library (15 tracks, `flask music-seed`), Generate Reel (B11), timeline (B12), music list (D4). A real 5-scene Reel generated in 26 s for 2 credits. QA found 6 issues and the Tester 1 bug over two rounds; all fixed. B4 complete. 1380 backend tests |
+| 2026-11-26 | Frontend F5 built against the real backend: New Reel (ideas, topic or pasted script, settings) and the Script editor (autosaved scenes, rewrites, reorder, hooks, Shorten with AI, Generate). Designs read from Stitch through Chrome. QA found 22 issues and the Tester 12 bugs over four rounds; all fixed but one deferred to F9. 530 frontend unit tests, 26 real-backend browser tests |

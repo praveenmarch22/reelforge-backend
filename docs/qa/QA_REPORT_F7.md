@@ -305,3 +305,197 @@ Also invalidate `['me']` when a followed post ends `failed` with `reconnect_requ
 5. **Order in §1.** The spec says save first, then confirm. The build confirms, then saves. The order is harmless; please confirm.
 6. **Choices across the Google round trip.** Visibility and the outdated confirm reset after connecting. Only the text is specified to survive. OK?
 7. **Post text and `updatedAt`.** Related to QF7-001: should editing the post text move the Reel to the top of the dashboard at all?
+
+---
+
+## Round 2 (2026-11-27)
+
+| | |
+|---|---|
+| Build tested | `frontend/` working tree (F7 still uncommitted, after [FIX_LOG_F7.md](FIX_LOG_F7.md)); backend at `6d15020` (QF7-001 fix in `api/reelforge_api/routes/projects.py:274-277`) |
+| Checks run | `npm run typecheck`: clean. `npx vitest run`: 19 files, **728 tests, all pass** |
+| Browser | **Not run**, for the same reasons as round 1 (dev server on 5173 and the stack were not to be touched; low memory). Every status below is *Read*, and *Test* where a passing unit test covers it. Backend tests were read, not run |
+
+### Verdict: pass with issues
+
+Both Majors are fixed, and so are the Tester's bugs. The fixes brought in no Blocker or Major. Three new Minor findings should be fixed before commit:
+
+- **QF7-017.** The publish page says a Reel can be published while a new render runs. The API refuses that.
+- **QF7-018.** Text typed just before **Connect YouTube** is still lost. The unmount flush doesn't run when the browser leaves the page.
+- **QF7-019.** The outdated confirmation stays after a newer, current video replaces the old one.
+
+The rest is Polish.
+
+| Severity | New in round 2 | Ids |
+|---|---|---|
+| Blocker | 0 | |
+| Major | 0 | |
+| Minor | 3 | QF7-017, QF7-018, QF7-019 |
+| Polish | 4 | QF7-020 to QF7-023 |
+
+### R2.1 Status of the round-1 items
+
+| Item | Status | Evidence |
+|---|---|---|
+| QF7-001 Major | **Fixed** | Backend: when B5 changes only `post_title`, `post_caption` or `hashtags`, `after_edit` is skipped (`routes/projects.py:274-277`). Tests: `test_changing_only_the_post_text_keeps_the_status` checks `rendered`, `posted`, `post_failed` and `render_failed`; `test_publishing.py:178-183` checks that `outdated` stays false. Read |
+| QF7-002 Major | **Fixed** | `ReelEditorPage.tsx`: Publish shows when `latestRender.state === 'succeeded' \|\| p.thumbnailUrl`. Only a finished render sets `thumbnail_asset_id` (`renders.py:416`), and a duplicated project doesn't copy it, so the condition means "a finished video exists". Read, Test |
+| QF7-003 | **Mostly fixed** | `not_connected` and `reconnect_required` refresh `me`; `render_outdated` shows the tick; `already_posted` reads the project fresh and links to the Short. Two remainders: QF7-021 and QF7-022. Read, Test |
+| QF7-004 | **Partly fixed** | Each field is saved on its own, invalid fields are skipped, and a field counts as saved only after success. A title over 100 characters isn't sent. The flush works for in-app navigation, but not for the trip to Google or closing the tab (QF7-018). Read, Test |
+| QF7-005 | Fixed | `sameRender` decides between "continues where it stopped" with **Try again**, and "This video is a newer render" with **Publish now**. Read, Test |
+| QF7-006 | Fixed | `YouTubeStep` reads the result once (`useState`) and `onResultSeen` resets the address to `?step=3` with `replace`. `no_channel` links to creating a channel. For `reconnect_required`, the step says "Reconnect YouTube" on the button only; no sentence explains it, which is acceptable. Read, Test |
+| QF7-007 | Fixed | Render page: the heading is `aria-live` and the percentage is a `role=status` in 10 % steps. The tracker has an sr-only status, and the tracker and the live view focus their headings. A disabled Render has a visible reason linked with `aria-describedby`. One remainder: QF7-023. Read, Test |
+| QF7-008 | Fixed | The buttons show "· n credits" (from H1) and a confirm with the cost. Read, Test |
+| QF7-009 | Fixed | `not_ready` names the scene positions, which are 1-based per API design B4, and selects the first. `too_long` and `too_short` add `details.seconds`. The backend `too_short` text no longer mentions Instagram (`renders.py:158`). Read, Test |
+| QF7-010 | Fixed | The error notice now also shows under the connected row (`PublishPage.tsx:554-558`). Read, Test |
+| QF7-011 | Fixed | E2 is polled every 3 s while the render is active. A succeeded E2 shows the video before the project catches up. When the project says the render ended, E2 polling stops (`RenderPage.tsx:40, 52`). There is no stale overwrite: E2 is read only while the project still calls the render active. Read, Test |
+| QF7-012 | **Regressed** (see QF7-017) | The new note invites publishing while a render runs, but F5 refuses it. The first bullet is still open: with no earlier video, a rendering Reel shows "Render the Reel first". That page is only reachable by URL, so it stays Polish and gets no new id |
+| QF7-013 | Partly fixed | The tiles are now a radio group. The counters are still inside the `<label>`. Their `aria-label` ("12 of 100 characters") becomes part of the field's accessible name, which still changes with every keystroke. Move the counter out of the label and link it with `aria-describedby`. Polish; no new id. Read |
+| QF7-014 | Partly fixed | "Publish again", the Copy link failure text and the status-specific reasons are done. The failed-state flash is only half gone (QF7-020). Read, Test |
+| QF7-015 | Fixed | `write.mutate(leaveSignal())`. Read, Test |
+| QF7-016 | Fixed | `REASONS` and `toConnectionReason` are shared from `ConnectionResult.tsx`; a pasted comma or space list is split. Read, Test |
+| BUG-080 | Fixed | `useState(failed?.visibility ?? 'public')`. Read, Test |
+| BUG-081 | Fixed | The project is read fresh after `already_posted`. The link is set only when that render's post is published. Edge case remains: QF7-022. Read, Test |
+| BUG-082 | Fixed | After `already_running`, `project.refetch()` runs and the render page opens if the Reel is `rendering`. A failed refetch falls back to the message. Cosmetic: if the Reel turns out to be *posting*, the backend text "This Reel is already rendering." is shown (`renders.py:166`). Read, Test |
+| BUG-083 | Fixed | `withDraft` applies the case-insensitive duplicate check and the limit of 30 to the hashtag still in the box. Read, Test |
+| BUG-084 | Fixed | The mock removes `connected`, `connection_error`, `platform`, `reason` and `instagram` from `returnTo`. Read, Test |
+| BUG-085 | **Decided, justified** | The project poll notices the status change at the end; E2 gives the progress, as SCREENS_F7 §2 asks. The cost is one extra request every 2 s while rendering |
+| InstagramStep (Q1) | **Done** | The component and its test are deleted. Leftover dead code, not a defect: `useConnectInstagram` (`frontend/src/api/hooks.ts:104`) and the `/instagram/connect` mock (`frontend/src/mocks/handlers.ts:256`) have no users left. Remove them when convenient |
+
+**Regression checks that passed (Read):**
+
+- **Autosave.**
+  - It cannot loop: the timer effect depends only on the field state, and `onSuccess` only writes a ref.
+  - Write with AI sets `saved` to its text, so it doesn't send that text again.
+  - Duplicate saves can happen but do no harm: the same field is sent again if a pause or the unmount comes while its save is still in flight.
+  - If two saves answer out of order, the next pause or the unmount flush repairs it, because `saved` then differs from the text.
+  - The flush after F5 (when the tracker replaces the form) sends text the server already has. B5 accepts it while `posting`, and it is not an edit.
+  - As the Tester noted, a Reel with an empty `postTitle` stores its title as `postTitle` 0.8 s after the publish page opens.
+- **The `already_posted` fresh read** writes `{project}.project` under `projectKey(id)`, which is the shape `useProject` stores. If the page knew a failed post on the same render, the form stays, with the link, which is correct.
+- **AccountRow** has one `useConnect` across both branches, so an error survives the switch from connected to reconnect.
+- **Focus.**
+  - The tracker focuses its heading only on mount, not on each step change.
+  - The live view focuses its heading once.
+- **YouTubeStep under StrictMode.** The double effect calls `onResultSeen` twice, which is harmless, and the result kept in `useState` survives.
+- **`withDraft`** handles a lone `#`, the case-insensitive duplicate and the limit of 30.
+
+### R2.2 New findings
+
+#### QF7-017 Minor: the publish page offers to publish while a new render runs, but the API refuses it
+
+| | |
+|---|---|
+| Where | `frontend/src/features/publish/PublishPage.tsx:142` (`renderRunning`), `493-495` (the note), `270-275` (`blocked` ignores it); `backend/api/reelforge_api/publishing.py:120-121` |
+| Requirement | PUBLISHING_YOUTUBE F5: `409 already_running` "(… or the Reel is rendering or posting)"; round-1 QF7-012 ("Disable Publish with that reason") |
+| Verified | Read |
+
+**Steps.** A Reel with a finished video. Start a new render, then open the publish page (the editor still shows Publish because `thumbnailUrl` is set). Press **Publish now**.
+
+**Expected.** Publish is disabled with the reason: "A new render is running. You can publish when it's done."
+
+**Actual.** The page says "A new render is running. You can publish this video now, or wait for the new one." Publish is enabled. F5 answers `409 already_running` "This Reel is busy. Try again when it's done." The page contradicts itself, and this came in with the QF7-012 fix.
+
+**Fix.** Add `renderRunning` to `blocked`, and change the note to "A new render is running. You can publish once it's done." If publishing the earlier video during a render is wanted, that is a backend and spec change for the product owner.
+
+#### QF7-018 Minor: text typed just before Connect YouTube (or before closing the tab) is still lost
+
+| | |
+|---|---|
+| Where | `frontend/src/features/publish/PublishPage.tsx:224` (flush in a React unmount cleanup), `534-535` (`go` calls F1 directly); `frontend/src/api/publishing.ts:84-87` (`window.location.assign`); the test `PublishPage.test.tsx:427-437` simulates leaving with `view.unmount()` |
+| Requirement | SCREENS_F7 §3 Unsaved text ("leaving and coming back keeps them"); FIX_LOG_F7 QF7-004 ("unsent text is sent when the page closes (including the trip to Google)") |
+| Verified | Read |
+
+**Steps.** On the publish page with no channel connected, type a description. Within 0.8 s, press **Connect YouTube**. Complete Google's consent and return.
+
+**Expected.** The description is there.
+
+**Actual.**
+
+- `window.location.assign` unloads the document, and React does not run effect cleanups on a page unload. So the unmount flush never runs.
+- The 800 ms timer may still fire while the old page is alive, but the browser aborts that PATCH when the page unloads.
+- The text is lost, and the same happens on reload or tab close.
+- The unit test passes only because it calls `unmount()` itself, which a browser never does here.
+
+**Fix.**
+
+- Pass an async `beforeLeave` from `PublishForm` to `AccountRow`. It sends the pending fields with `mutateAsync`, and only then calls F1.
+- For reload and tab close, add a `pagehide` listener that sends the pending fields with `fetch(…, {method: 'PATCH', keepalive: true})`.
+- Replace the test's `unmount()` with a check that the PATCH resolves *before* `location.assign` is called.
+
+#### QF7-019 Minor: the outdated confirmation stays when a newer, current video replaces the old one
+
+| | |
+|---|---|
+| Where | `frontend/src/features/publish/PublishPage.tsx:184` (`useState(outdated)` is read once), `134-147` (`PublishForm` has no `key`, so it stays mounted when `renderId` changes) |
+| Requirement | API design, Render (`outdated`); SCREENS_F7 §3 (the outdated notice is shown for an outdated render) |
+| Verified | Read |
+
+**Steps.** The latest finished video is outdated. Start a new render, then open the publish page from the editor. The outdated notice shows, along with "A new render is running … or wait for the new one". Wait on the page. The project poll brings the new render as `succeeded`.
+
+**Expected.** The page now shows the new video, which is current. The outdated notice disappears.
+
+**Actual.** The video changes (`key={render.id}`), but `mustConfirm` stays true. "You edited the Reel after this render" stays on screen, and **Publish now** stays disabled until "Publish this version anyway" is ticked for a video that isn't outdated.
+
+**Fix.** Derive the flag instead of storing it:
+
+```ts
+const [refusedFor, setRefusedFor] = useState<string | null>(null);
+const mustConfirm = outdated || refusedFor === renderId;
+// on render_outdated:
+setRefusedFor(renderId);
+```
+
+Also reset `confirmOutdated` when `renderId` changes.
+
+#### QF7-020 Polish: the render page still announces "Failed" before the history loads
+
+| | |
+|---|---|
+| Where | `frontend/src/features/publish/RenderPage.tsx:115` (heading, `aria-live`), `105` (placeholder label) |
+| Requirement | SCREENS_F7 §2 (newest finished video); round-1 QF7-014 ("show the spinner until E3 has loaded") |
+| Verified | Read. The test `RenderPage.test.tsx:186-197` checks only the alert and the buttons |
+
+**Actual.** After a failed attempt, the heading and the placeholder read "Failed" until E3 answers, then switch to "Your video is ready". Because the heading is a live region, screen readers announce both. The notice and Try again are correctly held back.
+
+**Fix.** When `render` is failed or cancelled and `history.isPending`, show the spinner (or a neutral heading) instead of `STATE_LABEL[render.state]`.
+
+#### QF7-021 Polish: a post that fails with `reconnect_required` leaves the channel row saying "connected"
+
+| | |
+|---|---|
+| Where | `frontend/src/features/publish/PublishPage.tsx:94-96, 139` (nothing refreshes `me` when the followed post ends `failed`) |
+| Requirement | PUBLISHING_YOUTUBE YT-6; the remainder of round-1 QF7-003 ("Also invalidate `['me']` when a followed post ends `failed` with `reconnect_required`") |
+| Verified | Read |
+
+**Actual.** The form comes back with the failure reason, while the row above still shows the channel with **Change**. **Try again** then gets the `reconnect_required` refusal, which does refresh the row. So the workaround is one wasted click.
+
+**Fix.** In `PublishBody`, use an effect: when `post?.state === 'failed' && post.error?.code === 'reconnect_required'`, invalidate `['me']`.
+
+#### QF7-022 Polish: after "Publish again", an `already_posted` first links to the older Short
+
+| | |
+|---|---|
+| Where | `frontend/src/features/publish/PublishPage.tsx:141` (`latestPostUrl` is the followed post's URL, from the older render), `318` |
+| Requirement | SCREENS_F7 §3 ("`already_posted` links to the Short"); the BUG-081 note |
+| Verified | Read |
+
+**Actual.** The synchronous fallback uses the URL of the post the page follows. After **Publish again**, that post belongs to the older render. The fresh read replaces the link a moment later. If that read fails, the link points to the wrong Short.
+
+**Fix.** Pass `latestPostUrl` only when `post.renderId === render.id`, or drop the synchronous fallback and rely on the fresh read.
+
+#### QF7-023 Polish: the live view is a live region that wraps its buttons, and it also takes focus
+
+| | |
+|---|---|
+| Where | `frontend/src/features/publish/PublishPage.tsx:651` (`role="status"` on the whole section), `640` (focus on mount) |
+| Requirement | Accessibility convention: `role=status` on a short status line (`ScriptEditorPage.tsx:203`, `Inspector.tsx:61`) |
+| Verified | Read |
+
+**Actual.** When the live view appears, screen readers may read the whole section (the note and all link and button texts) as a status. They also read it as the newly focused heading, so it is announced twice. Opening the page for a posted Reel also moves focus to the heading on load.
+
+**Fix.** Remove `role="status"` from the section. The focus move on the heading is enough. Alternatively, keep a separate sr-only status line, like the tracker has.
+
+### R2.3 Questions
+
+Round-1 questions 2 to 7 are still open for the product owner. Question 1 is closed (InstagramStep removed). New question:
+
+1. **QF7-017.** Should publishing the earlier video be allowed while a new render runs? Today F5 refuses it (`publishing.py:120`). The frontend fix depends on the answer. If no, disable Publish; if yes, it is a backend and spec change.

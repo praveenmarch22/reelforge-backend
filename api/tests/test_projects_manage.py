@@ -427,8 +427,19 @@ def test_editing_a_generated_project_sends_it_back_to_ready(app, database, outbo
     me = creator(app)
     project = scripted_project(app, me.browser)
     set_statuses(database, project["id"], voice="ready", visual="ready", status=status)
-    res = patch(me.browser, project["id"], {"postCaption": "New caption"})
+    # A change to the Reel itself (the post's own text doesn't count since QF7-001).
+    res = patch(me.browser, project["id"], {"tone": "funny"})
     assert res.get_json()["project"]["status"] == "ready"
+
+
+@pytest.mark.parametrize("status", ["rendered", "posted", "post_failed", "render_failed"])
+def test_changing_only_the_post_text_keeps_the_status(app, database, outbox, status):
+    """QF7-001: the post's title, caption and hashtags aren't part of the video."""
+    me = creator(app)
+    project = scripted_project(app, me.browser)
+    set_statuses(database, project["id"], voice="ready", visual="ready", status=status)
+    res = patch(me.browser, project["id"], {"postCaption": "New caption", "hashtags": ["a"]})
+    assert res.get_json()["project"]["status"] == status
 
 
 @pytest.mark.parametrize("status", ["generating", "rendering", "posting"])

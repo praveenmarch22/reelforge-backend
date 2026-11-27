@@ -51,6 +51,7 @@ def test_the_background_tasks_and_their_schedule_are_registered(app):
         "jobs.fail_stuck": "maintenance",
         "credits.reset_monthly": "maintenance",
         "connections.check": "maintenance",
+        "files.clean_replaced": "maintenance",  # B8
     }
     assert set(scheduled) <= set(celery.tasks)
     # Language-model jobs run on their own queue (technical design 7).

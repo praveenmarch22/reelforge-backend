@@ -46,6 +46,14 @@ def check_platform(platform: str) -> None:
         raise ApiError(404, "not_available", "Publishing to Instagram is coming soon.")
 
 
+def platform_enabled(platform: str) -> bool:
+    """The admin's kill switch for a publishing platform (I9, QB8-003)."""
+    from .models import ProviderSwitch
+
+    switch = db.session.get(ProviderSwitch, platform)
+    return switch is None or switch.enabled
+
+
 def safe_return_to(value: str | None) -> str:
     """The `returnTo` rule (API design F1): a path on the web app itself, or the default."""
     if not value or len(value) > RETURN_MAX or not value.startswith("/") or value.startswith("//"):

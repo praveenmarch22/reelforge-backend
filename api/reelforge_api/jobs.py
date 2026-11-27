@@ -240,7 +240,7 @@ def run(job_id: str) -> None:
         fail(job_id, JobFailed("timed_out"))
         return
     except ProviderError as e:
-        fail(job_id, _provider_failure(e), provider_error=True)
+        fail(job_id, _provider_failure(e), provider_error=True, providers=getattr(e, "failed", None))
         return
     except Exception:  # noqa: BLE001
         log.exception("job failed unexpectedly", extra={"job_id": str(job_id), "type": job.type})
@@ -298,7 +298,9 @@ def _provider_failure(e: ProviderError) -> JobFailed:
     return JobFailed("provider_failed")
 
 
-def fail(job_id, error: JobFailed, *, provider_error: bool = False) -> None:
+def fail(
+    job_id, error: JobFailed, *, provider_error: bool = False, providers: list[str] | None = None
+) -> None:
     """Marks a job failed (if it is still active), refunds it and undoes its effect on the
     project. Safe to call for a job that already finished: then it does nothing."""
 
@@ -309,12 +311,16 @@ def fail(job_id, error: JobFailed, *, provider_error: bool = False) -> None:
         return
     job.state, job.finished_at = "failed", now()
     job.error_code, job.error_message = error.code, error.message
+    if providers:
+        job.provider = providers[-1]  # the last one tried, so failed jobs can be found by provider
     credits.refund(job)
     _on_stop(job)
     db.session.commit()
     log.info("job failed", extra={"job_id": str(job.id), "type": job.type, "code": error.code})
     if provider_error:
-        record_usage(job.type, None, failed=True, credits_charged=0)
+        # Counted against each provider that failed, so the admin's error rate means something.
+        for name in providers or [None]:
+            record_usage(job.type, name, failed=True, credits_charged=0)
 
 
 def _on_stop(job: Job) -> None:

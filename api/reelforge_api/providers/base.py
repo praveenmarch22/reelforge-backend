@@ -43,9 +43,10 @@ class NotConfigured(ProviderError):
 class AllProvidersFailed(ProviderError):
     """Every provider in the list failed or was skipped."""
 
-    def __init__(self, message: str, *, none_available: bool):
+    def __init__(self, message: str, *, none_available: bool, failed: list[str] | None = None):
         super().__init__(message)
         self.none_available = none_available
+        self.failed = failed or []  # the providers that were tried and failed (admin usage, QB8-004)
 
 
 def json_of(resp: requests.Response) -> dict:
@@ -112,6 +113,7 @@ def with_fallback(
     """Tries each provider in order. Returns (result, name of the provider that served it)."""
     last: ProviderError | None = None
     tried_any = False
+    failed: list[str] = []
     for provider in providers:
         name = provider.name
         try:
@@ -121,8 +123,12 @@ def with_fallback(
             last = last or e
         except ProviderError as e:
             if e.refused:
+                e.failed = [name]
                 raise
             tried_any = True
+            failed.append(name)
             log.warning("provider failed, trying the next one", extra={"call": label, "provider": name})
             last = e
-    raise AllProvidersFailed(f"{label}: no provider succeeded ({last})", none_available=not tried_any)
+    raise AllProvidersFailed(
+        f"{label}: no provider succeeded ({last})", none_available=not tried_any, failed=failed
+    )

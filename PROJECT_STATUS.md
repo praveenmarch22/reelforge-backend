@@ -1,6 +1,6 @@
 # ReelForge: project status
 
-**Last updated:** 2026-11-26
+**Last updated:** 2026-11-28
 
 This is the single place to see where the project stands. It is updated at the end of every working session. The milestone definitions are in [MILESTONES.md](MILESTONES.md).
 
@@ -8,7 +8,7 @@ This is the single place to see where the project stands. It is updated at the e
 
 **Planning and design are finished. The frontend is under way: F1–F3 are done (setup, sign-in screens, dashboard and projects library), running against a mock API, and they have been through a QA review and automated testing with all findings fixed or scheduled. F4 (onboarding) is done too, after three test rounds. The backend is built one task at a time: B1 (setup), B2 (accounts) and B3 (projects, scripts, scenes, jobs and credits) are done, and so are B4 (generation: voiceovers, visuals, music, Generate Reel and the preview timeline) and B5 (rendering the final MP4 with a Remotion render service), each reviewed by QA and covered by automated tests. Scripts are written by real AI models (Gemini, with Groq as backup); voiceovers by ElevenLabs, with the free Edge voices as backup; visuals are Pixabay stock clips and FLUX images on Cloudflare; music comes from a 15-track CC BY library.**
 
-Next up: Instagram (B6b), B7, B8 and F8 (settings, credits, admin). F7's screens still need a look against the Stitch designs. F5 (New Reel, Script editor) and F6 (Reel editor with the live preview) are done and talk to the real backend (`npm run dev:real`): a Reel can be written, generated, previewed and edited on screen and **F5 New Reel and script editor** on the frontend. The web app still runs on its mock API; connecting it to the real one is milestone I1.
+Next up: **deploy** (see [DEPLOYMENT_OPTIONS.md](docs/DEPLOYMENT_OPTIONS.md)), then Instagram (B6b) and B7. To understand the system, start with [ARCHITECTURE.md](docs/ARCHITECTURE.md), [INTERVIEW_GUIDE.md](docs/INTERVIEW_GUIDE.md) and [DOCKER_K8S_HANDS_ON.md](docs/DOCKER_K8S_HANDS_ON.md).
 
 ## Milestones
 
@@ -25,7 +25,7 @@ Next up: Instagram (B6b), B7, B8 and F8 (settings, credits, admin). F7's screens
 | F5 | New Reel and script editor | Done | Against the real backend (`npm run dev:real`); four review rounds |
 | F6 | Reel editor | Done | Live Remotion preview using the renderer's own code; four review rounds |
 | F7 | Render and publish | Done | Render progress, publish to YouTube (channel, AI text, visibility, tracker, "Your Short is live"), connect results, onboarding step 3 on YouTube. Spec [SCREENS_F7.md](docs/SCREENS_F7.md); QA two rounds and Tester fixed ([FIX_LOG_F7.md](docs/qa/FIX_LOG_F7.md)). Still to compare with Stitch screens 12, 13, 20–22 |
-| F8 | Settings, credits and admin | Not started | |
+| F8 | Settings, credits and admin | Done | Settings (profile, defaults, YouTube, credits, security), out-of-credits dialog, admin console (users, jobs, providers, usage, music). Spec [SCREENS_F8.md](docs/SCREENS_F8.md); [FIX_LOG_B8_F8.md](docs/qa/FIX_LOG_B8_F8.md) |
 | F9 | Frontend hardening | Not started | |
 | B1 | Backend setup | Done | Flask API, Postgres (16 tables from the baseline migration), Redis, Celery worker, MinIO, Docker Compose. QA reviewed; see "B1 and B2 result" below |
 | B2 | Accounts | Done | Sign-up with email verification, login, 30-day sessions, password reset, profile, change password, delete account (API A1-A12). QA reviewed; both rule decisions made |
@@ -34,8 +34,11 @@ Next up: Instagram (B6b), B7, B8 and F8 (settings, credits, admin). F7's screens
 | B5 | Rendering | Done | API E1–E3; a Remotion render service in Docker (`renderer/server.mjs`) and its own render worker. A real Reel rendered end to end. Local renders are 720x1280 (slow laptop), production 1080x1920. QA: fail, then pass with issues; all fixed but one known gap. See [FIX_LOG_B5.md](docs/qa/FIX_LOG_B5.md) |
 | B6 | Publishing: YouTube Shorts | Done | Connect a channel (Google OAuth, tokens encrypted), AI title and caption (F4), publish with resumable upload and processing checks (F5, F6), licence credits added. A real Short published on 2026-11-26. QA: pass with issues; Tester: 7 bugs; all fixed. [PUBLISHING_YOUTUBE.md](docs/PUBLISHING_YOUTUBE.md), [FIX_LOG_B6.md](docs/qa/FIX_LOG_B6.md) |
 | B6b | Publishing: Instagram | Not started | After YouTube, in the same flow |
-| B7–B8 | Backend features | Not started | Built one task at a time, each agreed with the product owner first |
-| I1–I3 | Integration and launch | Not started | |
+| B7 | Full AI mode and audio extras | Not started | AI video clips, uploads, Whisper |
+| B8 | Admin and scheduled tasks | Done | Admin API I1–I14, clean-up of replaced files, purge deletes files first |
+| I1 | Connect frontend to the real API | Done | Every screen runs on the real backend (`npm run dev:real`, and production builds); the mock API stays for unit and browser tests |
+| I2 | Deploy | Options compared | [DEPLOYMENT_OPTIONS.md](docs/DEPLOYMENT_OPTIONS.md); nothing deployed yet |
+| I3 | Meta App Review | Not started | With Instagram (B6b) |
 
 ## What exists today
 
@@ -225,3 +228,4 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 | 2026-11-26 | Backend B5 built: the render service (Remotion in Docker, token and storage-only links), render jobs with one retry, a separate render worker, API E1–E3, latest render and cover in the project JSON. A real 29 s Reel rendered end to end (20 min at 1080x1920; 17 min at 720x1280). QA found 2 Major and 18 smaller issues over two rounds, the Tester 4 bugs; all fixed but one known gap. Render speed decided: 720p locally |
 | 2026-11-26 | YouTube publishing decided (YouTube first, Instagram after). Google Cloud project and OAuth client set up with the product owner. B6 built: connect, AI post text, publish. The first real Short published (it came out public). QA found 3 Major and 10 Minor issues, the Tester 7 bugs; all fixed. Docker Desktop's engine hung (machine low on memory) and was restarted with the product owner's OK |
 | 2026-11-27 | Frontend F7 built against the real backend (render and publish screens, YouTube onboarding step, channel pill). Overnight decisions recorded in FIX_LOG_F7. QA found 2 Major and 21 smaller issues over two rounds, the Tester 6 bugs; all fixed. 728 frontend unit tests |
+| 2026-11-28 | B8 (admin API, file clean-up) and F8 (settings, out-of-credits dialog, admin console) built; QA found 1 Blocker and 4 Major in B8, all fixed. Deployment options researched. Architecture document, interview guide and a Docker and Kubernetes hands-on plan written |

@@ -66,6 +66,11 @@ def create_app(settings: Settings | None = None) -> Flask:
                     "schedule": crontab(minute="*/5"),
                     "options": {"queue": "maintenance"},
                 },
+                "clean-replaced-files": {
+                    "task": "files.clean_replaced",
+                    "schedule": crontab(hour=3, minute=50),
+                    "options": {"queue": "maintenance"},
+                },
                 "check-connections": {
                     "task": "connections.check",
                     "schedule": crontab(hour=4, minute=20),
@@ -109,7 +114,18 @@ def create_app(settings: Settings | None = None) -> Flask:
     )
 
     from . import tasks  # noqa: F401 - registers the Celery tasks
-    from .routes import auth, catalogue, jobs_credits, me, projects, publishing, renders, scenes, system
+    from .routes import (
+        admin,
+        auth,
+        catalogue,
+        jobs_credits,
+        me,
+        projects,
+        publishing,
+        renders,
+        scenes,
+        system,
+    )
 
     for blueprint in (
         system.bp,
@@ -121,6 +137,7 @@ def create_app(settings: Settings | None = None) -> Flask:
         catalogue.bp,
         renders.bp,
         publishing.bp,
+        admin.bp,
     ):
         app.register_blueprint(blueprint, url_prefix=API_PREFIX + (blueprint.url_prefix or ""))
     register_cli(app)

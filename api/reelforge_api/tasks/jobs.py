@@ -1,6 +1,6 @@
 from celery import shared_task
 
-from .. import connections, credits, jobs
+from .. import cleanup, connections, credits, jobs
 
 
 @shared_task(
@@ -21,6 +21,12 @@ def run_job(job_id: str) -> None:
 def fail_stuck_jobs() -> int:
     """Every 5 minutes: jobs past their time limit fail and are refunded (G-11)."""
     return jobs.fail_stuck()
+
+
+@shared_task(name="files.clean_replaced", ignore_result=True)
+def clean_replaced_files() -> int:
+    """Daily: files replaced more than 7 days ago that nothing uses are deleted (B8, F-2)."""
+    return cleanup.clean_replaced()
 
 
 @shared_task(name="connections.check", ignore_result=True)

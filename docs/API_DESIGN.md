@@ -355,7 +355,7 @@ The value that is stored and used is the resolved path and query, never the text
 
 **H2. `GET /credits/ledger`**: User. Query: `limit`, `cursor`. `200` → `{"items": [{"id", "amount", "kind", "note", "jobId", "projectId", "createdAt"}], "nextCursor"}`.
 
-### I. Admin (13)
+### I. Admin (14)
 
 All require **Admin**. Every change is logged with the admin's id.
 
@@ -374,6 +374,19 @@ All require **Admin**. Every change is logged with the admin's id.
 | I11 | `POST /admin/music` | Body: `title`, `moods`, `license`, `sourceUrl`, `filename`, `contentType`, `sizeBytes` → track id + presigned upload URL |
 | I12 | `PATCH /admin/music/:id` | Body: `title`, `moods`, `license`, `isActive` |
 | I13 | `DELETE /admin/music/:id` | Deactivates; deleted for real only if no project uses it |
+| I14 | `GET /admin/stats` | Added in B8: users, Reels, today's failed jobs, credits held, for the console's summary |
+
+As built (B8):
+- I3 refuses an admin disabling their own account or removing their own admin role (`409 own_account`). Disabling a user signs them out everywhere.
+- I4 needs a `note` and refuses a balance below zero (`409 balance_negative`).
+- I6 starts a **new** job with the same input, free of charge, for a scene's failed `voice` or `visual` only. It answers `409 not_retryable` for any other type, and when that part of the scene is no longer failed, the caption words were fixed by hand or the narration changed, the Reel is being written, rendered or posted, the account is disabled or deleted, or the job was already retried (the old job's `output.retriedAs` holds the new job's id). `409 not_failed` for a job that didn't fail.
+- I8's error rate is today's, since usage is counted per day. A failure is counted against each provider that failed, and a failed job's `provider` is the last one tried. Switching `youtube` off makes F5 answer `503 provider_unavailable`, and a publish already waiting fails with `provider_unavailable` instead of uploading.
+- I3: switching `isTester` on or off sets the monthly allowance to the tester or normal default, unless `monthlyAllowance` is sent too.
+- I7 names the bad date in `details.fields` (`from` or `to`).
+- I14 leaves out deleted accounts' Reels and credits.
+- I9 needs a `reason` when switching a provider off.
+- I11 also takes `durationSeconds`. The new track stays inactive until its file is uploaded to the returned link and I12 switches it on (`409 file_missing` before that; `409 file_too_large` for an empty file or one over 30 MB).
+- Clean-up (daily, 03:50): files replaced more than 7 days ago that no scene, render or project uses are deleted, file and row. Purging deleted accounts and projects deletes their files first.
 
 ### J. System and internal (2)
 

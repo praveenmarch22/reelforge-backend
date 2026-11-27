@@ -519,10 +519,10 @@ def test_finished_jobs_are_counted_for_the_admin_usage_page(app, database, outbo
         (r["provider"], r["job_type"]): r
         for r in database.rows("SELECT * FROM usage_daily WHERE day = current_date")
     }
-    assert (
-        rows[("mock", "script")]["calls"] == 1 and rows[("mock", "script")]["credits_charged"] == SCRIPT_COST
-    )
-    assert rows[("mock", "ideas")]["calls"] == 1
-    failed = sum(r["failures"] for r in rows.values())
-    assert failed == 1
+    # One script written and one that the provider failed: the failure is counted against the
+    # provider that failed (QB8-004), and only the finished one is charged.
+    script = rows[("mock", "script")]
+    assert (script["calls"], script["failures"], script["credits_charged"]) == (2, 1, SCRIPT_COST)
+    assert (rows[("mock", "ideas")]["calls"], rows[("mock", "ideas")]["failures"]) == (1, 0)
+    assert set(rows) == {("mock", "script"), ("mock", "ideas")}
     assert waiting_jobs() == []

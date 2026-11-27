@@ -89,6 +89,10 @@ def start_publish(render: Render, project: Project, body) -> tuple[Post, Job]:
     """F5. The project must be locked. Caller commits, then dispatches."""
     user = current_user()
     connections.check_platform(body.platform)
+    if not connections.platform_enabled(body.platform):
+        raise ApiError(
+            503, "provider_unavailable", "Publishing to YouTube is paused for now. Try again later."
+        )
     if render.state != "succeeded" or render.asset_id is None:
         raise ApiError(409, "not_ready", "This render isn't finished yet.")
     if render.timeline_version < project.timeline_version and not body.confirm_outdated:
@@ -267,6 +271,13 @@ class PublishJob:
         db.session.commit()  # no transaction stays open during the upload
 
         client = youtube(settings)
+        # Switched off since the request (AD2): nothing new is uploaded (BUG-087). A video that
+        # is already on YouTube is still checked to its end.
+        if post["videoId"] is None and not connections.platform_enabled("youtube"):
+            raise jobs.JobFailed(
+                "provider_unavailable", "Publishing to YouTube is paused for now. Try again later."
+            )
+        db.session.commit()
         try:
             token = connections.access_token(post["accountId"])
             video_id = post["videoId"]

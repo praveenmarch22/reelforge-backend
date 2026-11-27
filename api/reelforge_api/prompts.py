@@ -117,6 +117,26 @@ Reply with JSON only, exactly this shape:
 {{"narration": "...", "on_screen_text": "..."}}"""
 
 
+def caption_prompt(title: str, topic: str, script: str) -> str:
+    return f"""You write the post text for a short vertical video (a YouTube Short or an Instagram Reel).
+English only.
+
+{_quoted("WORKING TITLE", title)}
+{_quoted("TOPIC", topic)}
+{_quoted("SCRIPT", script)}
+
+Write:
+- "title": a catchy title, at most 90 characters, no hashtags, no quotation marks;
+- "caption": 2 to 4 short sentences that make people want to watch and follow, at most 600
+  characters, no hashtags;
+- "hashtags": 5 to 10 relevant hashtags without the # sign, no spaces.
+Never use the characters < or >.
+{_SAFETY}
+
+Reply with JSON only, exactly this shape:
+{{"title": "...", "caption": "...", "hashtags": ["...", "..."]}}"""
+
+
 def hooks_prompt(topic: str, tone: str, first_scene: str) -> str:
     return f"""You write opening lines (hooks) for vertical Instagram Reels. English only.
 

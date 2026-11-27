@@ -41,6 +41,7 @@ PROJECT_FIELDS = SUMMARY_FIELDS | {
     "estimatedSeconds",
     "wordCount",
     "timelineVersion",
+    "postTitle",
     "postCaption",
     "hashtags",
     "scenes",

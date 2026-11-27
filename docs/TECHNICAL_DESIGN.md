@@ -1031,7 +1031,13 @@ A small Node HTTP service (`renderer/server.mjs`, its own Docker image; API desi
 - The player's `onMediaError` is never part of the timeline sent to the renderer: a file that fails to load fails the render with Remotion's own message.
 - Locally the service is `renderer` in Docker Compose (port 3100 on the host for checks). Tests use an offline stand-in (`RENDER_SERVICE_URL=mock`), which production refuses.
 
+### YouTube Shorts (YouTube Data API v3)
+
+Built first (B6). OAuth, the resumable upload, processing checks, token encryption and edge cases are in [PUBLISHING_YOUTUBE.md](PUBLISHING_YOUTUBE.md).
+
 ### Instagram (Instagram API with Instagram Login)
+
+Built after YouTube (B6b), into the same platform-neutral endpoints.
 
 **Connect**
 1. `GET /instagram/connect` returns the authorization URL with scopes `instagram_business_basic` and `instagram_business_content_publish`, and a signed `state` value tied to the user (prevents CSRF).
@@ -1148,7 +1154,7 @@ Same milestones as the PRD, with the technical work in each.
 | 5 | Faceless visuals | `visuals` queue, stock search UI, uploads with presigned URLs | Every scene has a visual; swap and upload work |
 | 6 | Preview | `packages/video` shared with web; timeline endpoint; editor layout | Full preview with captions, overlays, music |
 | 7 | Render | Render service, `render` queue, renders table, download | MP4 produced from the editor |
-| 8 | Instagram | OAuth, encrypted tokens, publish task, post screen | A Reel posted to your own account |
+| 8 | Publishing | YouTube first: OAuth, encrypted tokens, publish task, post screen; then Instagram | A Short on your own channel (done 2026-11-26), then a Reel on your own account |
 | 9 | Credits and dashboard | Ledger, reservations, estimates, dashboard filters | Costs shown, charged and refunded correctly |
 | 10 | Full AI mode | Keyframes, `ai_video` queue, Hugging Face provider, clip fitting | A Full AI Reel renders, with fallbacks working |
 | 11 | Audio extras | Upload voiceover, Groq Whisper API, music library admin, volume and ducking UI | All audio features in PRD 5.3 |

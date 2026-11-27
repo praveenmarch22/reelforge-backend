@@ -236,7 +236,7 @@ def update_project(project_id: str):
         ]
         if nulls:
             raise _bad(f"settings.{nulls[0]}", "Required")
-    for field in ("title", "tone", "music_mood", "post_caption", "hashtags"):
+    for field in ("title", "tone", "music_mood", "post_title", "post_caption", "hashtags"):
         if field in sent:
             setattr(project, field, sent[field])
     if sent.get("voice_id") is not None and sent["voice_id"] != project.voice_id:
@@ -271,7 +271,10 @@ def update_project(project_id: str):
     if sent.get("settings") is not None:
         changes = body.settings.model_dump(exclude_unset=True, by_alias=True)
         project.settings = {**project.settings, **{k: v for k, v in changes.items() if v is not None}}
-    projects.after_edit(project)
+    # The post's title, caption and hashtags aren't part of the video: changing only them is not
+    # an edit of the Reel, so a render stays current and the status stays (QF7-001).
+    if not set(sent) <= {"post_title", "post_caption", "hashtags"}:
+        projects.after_edit(project)
     db.session.commit()
     return jsonify(project=projects.project_json(project), estimate=projects.estimate(project))
 
@@ -341,6 +344,7 @@ def duplicate_project(project_id: str):
                 "music_track_id",
                 "music_asset_id",
                 "settings",
+                "post_title",
                 "post_caption",
                 "hashtags",
             )

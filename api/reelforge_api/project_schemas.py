@@ -21,6 +21,7 @@ from .script_rules import (
     NARRATION_MAX,
     ON_SCREEN_TEXT_MAX,
     POST_CAPTION_MAX,
+    POST_TITLE_MAX,
     PROMPT_MAX,
     SCRIPT_MAX,
     STOCK_QUERY_MAX,
@@ -140,8 +141,34 @@ class UpdateProjectBody(Body):
     # Absent = unchanged; null = no music chosen (the library picks one by mood, B4).
     music: MusicChoice | None = Field(default=None)
     settings: SettingsBody | None = None
+    post_title: Annotated[str, _line(POST_TITLE_MAX), AfterValidator(lambda v: _no_angle(v))] | None = None
     post_caption: Annotated[str, _text(POST_CAPTION_MAX)] | None = None
     hashtags: Annotated[list[str], Field(max_length=100), AfterValidator(_hashtags)] | None = None
+
+
+def _no_angle(value: str) -> str:
+    """YouTube refuses titles and descriptions with < or > (YT-11)."""
+    if "<" in value or ">" in value:
+        raise ValueError("Remove the < and > characters")
+    return value
+
+
+class PublishBody(Body):
+    """F5 (B6)."""
+
+    platform: Literal["youtube", "instagram"]
+    title: Annotated[str, _line(POST_TITLE_MAX, required=True), AfterValidator(_no_angle)]
+    caption: Annotated[str, _text(POST_CAPTION_MAX), AfterValidator(_no_angle)] = ""
+    hashtags: Annotated[list[str], Field(max_length=100), AfterValidator(_hashtags)] = []
+    visibility: Literal["private", "unlisted", "public"] = "public"
+    share_to_feed: bool = True
+    confirm_outdated: bool = False
+
+    @model_validator(mode="after")
+    def _hashtags_plain(self) -> PublishBody:
+        if any("<" in h or ">" in h for h in self.hashtags):
+            raise ValueError("Remove the < and > characters from the hashtags")
+        return self
 
 
 class InstructionsBody(Body):

@@ -22,6 +22,7 @@ EXPECTED_TABLES = {
     "provider_switches",
     "idempotency_keys",
     "usage_daily",
+    "youtube_accounts",
 }
 
 
@@ -30,12 +31,12 @@ def table_names(session) -> set[str]:
     return {r[0] for r in rows}
 
 
-def test_all_sixteen_tables_exist(session):
+def test_all_seventeen_tables_exist(session):
     assert table_names(session) - {"alembic_version"} == EXPECTED_TABLES
 
 
 def test_database_is_at_the_latest_migration(session):
-    assert session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0001"
+    assert session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0002"
 
 
 def new_user(session, email="a@example.com"):

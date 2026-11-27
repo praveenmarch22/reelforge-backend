@@ -179,6 +179,14 @@ class MockLLM:
             "on_screen_text": c.get("on_screen_text") or "The point",
         }
 
+    def _caption(self, c: dict) -> dict:
+        topic = c.get("topic") or c.get("title") or "this"
+        return {
+            "title": f"{topic}: what nobody tells you"[:90],
+            "caption": f"Everything you need to know about {topic} in under a minute. Follow for more.",
+            "hashtags": ["shorts", "learn", "facts"],
+        }
+
     def _hooks(self, c: dict) -> dict:
         topic = c.get("topic") or "this"
         return {

@@ -32,6 +32,7 @@ from .script_rules import (
     NARRATION_MAX,
     ON_SCREEN_TEXT_MAX,
     POST_CAPTION_MAX,
+    POST_TITLE_MAX,
     PROMPT_MAX,
     SCENES_MAX,
     STOCK_QUERY_MAX,
@@ -387,6 +388,40 @@ class RewriteScene:
         pass
 
 
+def check_caption(answer: dict) -> dict:
+    # YouTube refuses < and > (YT-11): they are removed first, so what is saved can always be
+    # published as it is (BUG-079). A title left empty is asked for again.
+    def plain(value):
+        return value.replace("<", "").replace(">", "") if isinstance(value, str) else value
+
+    title = clean(plain(answer["title"]), POST_TITLE_MAX, required=True)
+    caption = clean(plain(answer["caption"]), POST_CAPTION_MAX)
+    tags = clean_hashtags([plain(t) for t in answer.get("hashtags") or [] if isinstance(t, str)])
+    return {"title": title, "caption": caption, "hashtags": tags[:10]}
+
+
+class Caption:
+    """F4: the post's title, caption and hashtags, written by the language model. Free."""
+
+    @staticmethod
+    def work(job: Job):
+        i = job.input
+        prompt = prompts.caption_prompt(i["title"], i["topic"], i["script"])
+        return ask("caption", prompt, {"title": i["title"], "topic": i["topic"]}, check_caption)
+
+    @staticmethod
+    def apply(job: Job, written: dict) -> dict:
+        project = db.session.get(Project, job.project_id)
+        if project is not None:
+            project.post_title, project.post_caption = written["title"], written["caption"]
+            project.hashtags = written["hashtags"]
+        return written
+
+    @staticmethod
+    def on_stop(job: Job) -> None:
+        pass
+
+
 class Hooks:
     """B9: three alternative opening lines. Choosing one is an ordinary scene edit."""
 
@@ -406,10 +441,12 @@ class Hooks:
 
 
 from .generation import VoiceJob  # noqa: E402 - generation imports this module's neighbours
+from .publishing import PublishJob  # noqa: E402
 from .renders import RenderJob  # noqa: E402
 from .visuals import VisualJob  # noqa: E402
 
 TYPES = {
     "ideas": Ideas, "script": Script, "rewrite_scene": RewriteScene, "hooks": Hooks,
-    "voice": VoiceJob, "visual": VisualJob, "render": RenderJob,
+    "voice": VoiceJob, "visual": VisualJob, "render": RenderJob, "caption": Caption,
+    "publish": PublishJob,
 }  # fmt: skip

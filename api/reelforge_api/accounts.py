@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from flask import current_app
 from sqlalchemy import select, update
 
+from . import connections
 from .extensions import db
 from .models import AuthToken, CreditAccount, CreditLedger, InstagramAccount, User
 from .security import hash_password, hash_token, new_token
@@ -111,6 +112,7 @@ def soft_delete(user: User) -> None:
         .values(used_at=now())
     )
     db.session.query(InstagramAccount).filter_by(user_id=user.id).delete()
+    connections.forget_user(user.id)
     # Running work is cancelled the normal way: tasks are revoked and their results dropped.
     from .jobs import cancel_active
     from .models import Project

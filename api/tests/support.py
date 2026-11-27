@@ -243,5 +243,6 @@ def new_user_json(user_id: str, email: str, name: str) -> dict:
         "onboardingCompleted": False,
         "isAdmin": False,
         "credits": {"balance": 100, "monthlyAllowance": 100, "resetsAt": first_of_next_month()},
+        "connections": {"youtube": None, "instagram": None},
         "instagram": {"connected": False, "username": None, "status": None, "expiresAt": None},
     }

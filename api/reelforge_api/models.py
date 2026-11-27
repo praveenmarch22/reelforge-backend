@@ -46,6 +46,7 @@ class User(db.Model):
 
     credit_account: Mapped[CreditAccount | None] = relationship(uselist=False, lazy="joined")
     instagram_account: Mapped[InstagramAccount | None] = relationship(uselist=False, lazy="joined")
+    youtube_account: Mapped[YoutubeAccount | None] = relationship(uselist=False, lazy="joined")
 
 
 class AuthToken(db.Model):
@@ -121,6 +122,25 @@ class InstagramAccount(db.Model):
     updated_at: Mapped[datetime] = _now()
 
 
+class YoutubeAccount(db.Model):
+    """A connected YouTube channel (milestone B6). Tokens are stored encrypted (crypto.py)."""
+
+    __tablename__ = "youtube_accounts"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    channel_id: Mapped[str] = mapped_column(Text)
+    channel_title: Mapped[str] = mapped_column(Text, server_default="")
+    picture_url: Mapped[str] = mapped_column(Text, server_default="")
+    access_token_enc: Mapped[bytes] = mapped_column(LargeBinary)
+    refresh_token_enc: Mapped[bytes] = mapped_column(LargeBinary)
+    token_expires_at: Mapped[datetime] = _time()
+    scopes: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
+    status: Mapped[str] = mapped_column(Text, server_default="connected")
+    created_at: Mapped[datetime] = _now()
+    updated_at: Mapped[datetime] = _now()
+
+
 # ---------------------------------------------------------------- projects (milestone B3)
 
 
@@ -145,6 +165,7 @@ class Project(db.Model):
     status: Mapped[str] = mapped_column(Text, server_default="scripting")
     timeline: Mapped[dict | None] = mapped_column(JSONB)
     timeline_version: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    post_title: Mapped[str] = mapped_column(Text, server_default="")
     post_caption: Mapped[str] = mapped_column(Text, server_default="")
     hashtags: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
     thumbnail_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
@@ -256,6 +277,36 @@ class Render(db.Model):
 
     asset: Mapped[Asset | None] = relationship(foreign_keys=[asset_id], lazy="selectin")
     thumbnail_asset: Mapped[Asset | None] = relationship(foreign_keys=[thumbnail_asset_id], lazy="selectin")
+
+
+class Post(db.Model):
+    """One attempt to publish a render to a platform (milestone B6)."""
+
+    __tablename__ = "posts"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    render_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("renders.id", ondelete="CASCADE"))
+    platform: Mapped[str] = mapped_column(Text, server_default="instagram")
+    instagram_account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    youtube_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("youtube_accounts.id", ondelete="SET NULL")
+    )
+    job_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"))
+    title: Mapped[str] = mapped_column(Text, server_default="")
+    caption: Mapped[str] = mapped_column(Text)
+    visibility: Mapped[str] = mapped_column(Text, server_default="public")
+    share_to_feed: Mapped[bool] = mapped_column(server_default=text("true"))
+    container_id: Mapped[str | None] = mapped_column(Text)
+    media_id: Mapped[str | None] = mapped_column(Text)
+    permalink: Mapped[str | None] = mapped_column(Text)
+    state: Mapped[str] = mapped_column(Text, server_default="queued")
+    progress: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
+    error_code: Mapped[str | None] = mapped_column(Text)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    published_at: Mapped[datetime | None] = _time()
+    created_at: Mapped[datetime] = _now()
+    updated_at: Mapped[datetime] = _now()
 
 
 class MusicTrack(db.Model):

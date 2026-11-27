@@ -36,18 +36,24 @@ log = logging.getLogger(__name__)
 ACTIVE = ("queued", "running")
 QUEUES = {
     "ideas": "llm", "script": "llm", "rewrite_scene": "llm", "hooks": "llm", "caption": "llm",
-    "voice": "voice", "visual": "visuals", "render": "render",
+    "voice": "voice", "visual": "visuals", "render": "render", "publish": "publish",
 }  # fmt: skip
 # A job running longer than this is treated as stuck and failed (task design rule 3).
 TIME_LIMITS = {
     "llm": timedelta(minutes=5), "voice": timedelta(minutes=7), "visuals": timedelta(minutes=7),
+    "publish": timedelta(minutes=22),
 }  # fmt: skip
 # Celery's (soft, hard) limits in seconds per queue. A voice job may try ElevenLabs three
 # times and then Edge three times, with waits for rate limits, before it gives up.
 # Renders have their own worker that takes one at a time, so a render's clock starts when the
 # service starts drawing it. A 90 s Reel takes about 30 minutes on a developer's machine at
 # 720x1280 (QB5-001). The limits stay under Redis's 1-hour redelivery timeout.
-TASK_LIMITS = {"llm": (240, 300), "voice": (360, 420), "visuals": (360, 420)}  # render: task_limits()
+TASK_LIMITS = {
+    "llm": (240, 300),
+    "voice": (360, 420),
+    "visuals": (360, 420),
+    "publish": (1200, 1260),
+}  # render: task_limits()
 
 
 def task_limits(queue: str) -> tuple[int, int]:
@@ -76,6 +82,14 @@ MESSAGES = {
     "no_stock_match": "No stock clip fits this scene. Try other search words, or switch it to an AI image.",
     "media_missing": "A file this Reel uses is missing. Generate the scenes again, then render.",
     "render_failed": "The video couldn't be made. Please try again.",
+    "not_connected": "Connect your YouTube channel first.",
+    "reconnect_required": "Your YouTube connection has expired. Connect YouTube again, then try again.",
+    "quota_exceeded": "YouTube's daily upload limit is reached. Try again tomorrow.",
+    "rejected": "YouTube couldn't process this video. Render it again and try once more.",
+    "upload_failed": "The upload to YouTube didn't go through. Please try again.",
+    "invalid_metadata": (
+        "YouTube didn't accept the title, description or hashtags. Change them and try again."
+    ),
     "queue_unavailable": "We couldn't start this. Please try again in a moment.",
     "internal_error": "Something went wrong on our side. Please try again.",
 }

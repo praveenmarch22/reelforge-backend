@@ -50,6 +50,7 @@ def test_the_background_tasks_and_their_schedule_are_registered(app):
         "accounts.clean_tokens": "maintenance",
         "jobs.fail_stuck": "maintenance",
         "credits.reset_monthly": "maintenance",
+        "connections.check": "maintenance",
     }
     assert set(scheduled) <= set(celery.tasks)
     # Language-model jobs run on their own queue (technical design 7).
@@ -86,8 +87,15 @@ PRODUCTION = {
     "llm_providers": "gemini,groq",
     "render_service_url": "http://renderer.internal:3000",
     "render_service_token": "Vd6tKs2wQm9xLp4h" * 2,
+    "publish_providers": "youtube",
+    "youtube_redirect_uri": "https://app.reelforge.example/api/v1/connections/youtube/callback",
+    # A real Fernet key (32 random bytes, url-safe base64), not the development one.
+    "token_encryption_key": "q3V9mL2xR8tY4wZ1nB6cD0fG5hJ7kP9sA2eU4iO6rT8=",
 }
-SECRETS = ("secret_key", "database_url", "s3_secret_key", "smtp_password", "render_service_token")
+SECRETS = (
+    "secret_key", "database_url", "s3_secret_key", "smtp_password", "render_service_token",
+    "token_encryption_key",
+)  # fmt: skip
 
 
 def shows_part_of(text: str, secret: str, length: int = 6) -> bool:

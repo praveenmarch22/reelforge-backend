@@ -13,6 +13,8 @@ DEV_SECRET_KEY = "dev-only-secret-change-me"  # noqa: S105
 DEV_S3_SECRET = "reelforge-dev-secret"  # noqa: S105
 DEV_DATABASE_URL = "postgresql+psycopg://reelforge:reelforge@localhost:5432/reelforge"
 DEV_DATABASE_LOGIN = "reelforge:reelforge@"
+# Fernet key for tokens kept for users (YouTube), for local development only.
+DEV_TOKEN_KEY = "ZGV2LW9ubHktdG9rZW4ta2V5LWNoYW5nZS1tZS0wMDA="  # noqa: S105
 # One exact origin: scheme, host, optional port. Nothing that the CORS library could read
 # as a pattern, which would let look-alike sites call the API with the user's cookies.
 _ORIGIN = re.compile(r"^https?://[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*(:\d{1,5})?$")
@@ -96,6 +98,17 @@ class Settings(BaseSettings):
     # "Render service"). Redis's redelivery timeout is set above it.
     render_time_limit_seconds: int = Field(default=3000, ge=300, le=4 * 3600)
 
+    # Publishing (milestone B6; docs/PUBLISHING_YOUTUBE.md). "youtube" uploads for real; "mock"
+    # pretends offline (tests, development without keys); production refuses the mock.
+    publish_providers: str = "youtube"
+    youtube_client_id: str = ""
+    youtube_client_secret: str = Field(default="", repr=False)
+    # Google sends the browser back here after sign-in: the web app's address, which passes
+    # /api to this API, so the sign-in cookie comes along.
+    youtube_redirect_uri: str = "http://localhost:5173/api/v1/connections/youtube/callback"
+    # Encrypts the tokens kept for users (Fernet: 32 bytes, url-safe base64).
+    token_encryption_key: str = Field(default=DEV_TOKEN_KEY, repr=False)
+
     # How background jobs are started. "celery": sent to the worker. "manual": kept in a list
     # for tests to run one by one. Empty = manual in the test environment, celery elsewhere.
     job_dispatch: Literal["celery", "manual"] | None = None
@@ -119,6 +132,16 @@ class Settings(BaseSettings):
         ):
             if set(names) - allowed or not names:
                 raise ValueError(f"{setting} must list {' or '.join(sorted(allowed))}, separated by commas")
+        if set(self.publish_provider_names) - {"youtube", "mock"} or not self.publish_provider_names:
+            raise ValueError("PUBLISH_PROVIDERS must list youtube or mock, separated by commas")
+        try:
+            from cryptography.fernet import Fernet
+
+            Fernet(self.token_encryption_key)
+        except ValueError:
+            raise ValueError(
+                "TOKEN_ENCRYPTION_KEY must be a Fernet key (32 bytes, url-safe base64)"
+            ) from None
         unknown = set(self.voice_provider_names) - {"elevenlabs", "edge", "mock"}
         if unknown or not self.voice_provider_names:
             raise ValueError("VOICE_PROVIDERS must list elevenlabs, edge or mock, separated by commas")
@@ -147,6 +170,12 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "STOCK_PROVIDERS and IMAGE_PROVIDERS must not include the mock in production"
                 )
+            if "mock" in self.publish_provider_names:
+                raise ValueError("PUBLISH_PROVIDERS must not include the mock in production")
+            if self.token_encryption_key == DEV_TOKEN_KEY:
+                raise ValueError("TOKEN_ENCRYPTION_KEY must be set to a new random key in production")
+            if not self.youtube_redirect_uri.startswith("https://"):
+                raise ValueError("YOUTUBE_REDIRECT_URI must be an https address in production")
             if self.cookie_secure is False:
                 raise ValueError("COOKIE_SECURE cannot be off in production")
             if self.email_provider != "smtp":
@@ -170,6 +199,10 @@ class Settings(BaseSettings):
     @property
     def image_provider_names(self) -> list[str]:
         return [name.strip() for name in self.image_providers.split(",") if name.strip()]
+
+    @property
+    def publish_provider_names(self) -> list[str]:
+        return [name.strip() for name in self.publish_providers.split(",") if name.strip()]
 
     @property
     def jobs_dispatch(self) -> str:

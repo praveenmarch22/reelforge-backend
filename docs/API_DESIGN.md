@@ -311,7 +311,9 @@ While the project's script is being written (status `scripting`), C1–C6 answer
 
 **E3. `GET /projects/:id/renders`**: User. `200` → `{"items": [Render]}`, newest first (render history, the latest 50).
 
-### F. Instagram and posts (6)
+### F. Publishing: connections and posts (6)
+
+> **2026-11-26: YouTube Shorts first.** Publishing is now platform-neutral, and YouTube Shorts is built first (milestone B6). Instagram comes later in the same flow (B6b). The YouTube design is in [PUBLISHING_YOUTUBE.md](PUBLISHING_YOUTUBE.md). That document's group F (`/connections/:platform/…`, platform-neutral F4–F6) replaces the endpoints below. The Instagram text stays as the Instagram part of the platform-neutral endpoints (B6b).
 
 **F1. `GET /instagram/connect`**: Verified. Query: `returnTo` (optional; the app page to come back to, for example `/onboarding?step=3`; default `/app/settings`). `200` → `{"authorizeUrl": "https://www.instagram.com/oauth/authorize?…"}`. The web app redirects the browser there. Includes a signed `state` that is valid for 10 minutes, can be used once, and carries the user and the sanitised `returnTo`. Errors: `403 email_not_verified`.
 

@@ -111,6 +111,8 @@ One row per issued refresh token (sessions).
 
 ### 3.4 instagram_accounts
 
+Migration 0002 (B6) adds `youtube_accounts`, gives `posts` a `platform` and YouTube columns, and gives `projects` a `post_title`. See "Data" in [PUBLISHING_YOUTUBE.md](PUBLISHING_YOUTUBE.md).
+
 At most one connected account per user in v1.
 
 | Column | Type | Rules | Notes |
@@ -272,7 +274,7 @@ A render is **outdated** when `renders.timeline_version < projects.timeline_vers
 
 ### 3.13 posts
 
-One attempt to publish a render to Instagram.
+One attempt to publish a render to a platform (YouTube from migration 0002; see [PUBLISHING_YOUTUBE.md](PUBLISHING_YOUTUBE.md)). The Instagram columns are described below.
 
 | Column | Type | Rules | Notes |
 |---|---|---|---|

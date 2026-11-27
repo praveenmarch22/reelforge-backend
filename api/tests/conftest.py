@@ -96,6 +96,9 @@ def make_settings(**overrides) -> Settings:
         "cloudflare_account_id": "",
         "cloudflare_api_token": "",
         "render_service_url": "mock",
+        "publish_providers": "mock",
+        "youtube_client_id": "",
+        "youtube_client_secret": "",
     }
     values.update(overrides)
     return Settings(**values)

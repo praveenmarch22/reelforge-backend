@@ -315,7 +315,10 @@ def _progress(
             or 0
         )
     if project.status == "posting":
-        return 0  # the post's progress arrives with milestone B6
+        from .publishing import latest_post
+
+        post = latest_post(project.id)
+        return post.progress if post is not None else 0
     return None
 
 
@@ -369,14 +372,22 @@ def project_json(project: Project) -> dict[str, Any]:
         "estimatedSeconds": round(sum(estimated_seconds(s.narration) for s in scenes), 1),
         "wordCount": sum(word_count(s.narration) for s in scenes),
         "timelineVersion": project.timeline_version,
+        "postTitle": project.post_title,
         "postCaption": project.post_caption,
         "hashtags": project.hashtags,
         "scenes": [scene_json(s) for s in scenes],
         "activeJobs": jobs_module.jobs_json(active),
         "latestRender": _latest_render(project),
-        "latestPost": None,  # milestone B6
+        "latestPost": _latest_post(project),
         "createdAt": _iso(project.created_at),
     }
+
+
+def _latest_post(project: Project) -> dict[str, Any] | None:
+    from .publishing import latest_post, post_json
+
+    post = latest_post(project.id)
+    return post_json(post) if post is not None else None
 
 
 def _latest_render(project: Project) -> dict[str, Any] | None:

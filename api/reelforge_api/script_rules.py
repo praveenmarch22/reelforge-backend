@@ -34,6 +34,7 @@ STYLE_MAX = 100
 CHARACTER_MAX = 300
 INSTRUCTIONS_MAX = 200
 POST_CAPTION_MAX = 2200
+POST_TITLE_MAX = 100  # YouTube's title limit
 HASHTAGS_MAX = 30
 HASHTAG_MAX = 100
 SCENES_MAX = 30
@@ -62,6 +63,8 @@ COSTS = {
     # Free or same-priced actions, listed so the web app never has to guess.
     "ideas": 0,
     "hooks": 0,
+    "caption": 0,
+    "publish": 0,
     "rewrite": 1,
 }
 JOB_COSTS = {
@@ -69,6 +72,7 @@ JOB_COSTS = {
     "script": COSTS["script"],
     "rewrite_scene": COSTS["rewrite"],
     "hooks": COSTS["hooks"],
+    "caption": 0,  # F4 (B6): the post's title, caption and hashtags
 }
 
 

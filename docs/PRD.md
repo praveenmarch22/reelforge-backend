@@ -151,7 +151,9 @@ Priority: **P0** = required for version 1, **P1** = in version 1 if time allows,
 | R3 | Download the MP4 | P0 |
 | R4 | Notification (in app, and email P1) when a render finishes or fails | P0 |
 
-### 5.8 Instagram
+### 5.8 Publishing (YouTube Shorts first, then Instagram)
+
+> **2026-11-26: YouTube Shorts first.** Publishing is now platform-neutral, and YouTube Shorts is built first (milestone B6). Instagram comes later in the same flow (B6b). The YouTube design is in [PUBLISHING_YOUTUBE.md](PUBLISHING_YOUTUBE.md). The Instagram text below stays for B6b.
 
 | ID | Feature | Priority |
 |---|---|---|
@@ -221,6 +223,8 @@ Monthly allowance: **100 credits**. During testing, accounts get a larger allowa
 
 ### Flow 2: Connect Instagram
 
+For YouTube (built first), see "Flow: connect YouTube" in [PUBLISHING_YOUTUBE.md](PUBLISHING_YOUTUBE.md).
+
 1. From onboarding or Settings, the creator clicks **Connect Instagram**.
 2. The app explains the requirement: a Business or Creator account. A link explains how to switch for free.
 3. The creator is redirected to Instagram, logs in and approves the permissions.
@@ -273,6 +277,8 @@ Same as Flow 3, except:
 6. **Mix**: voice volume, music volume, music lowering on or off. The preview updates immediately.
 
 ### Flow 6: Post to Instagram
+
+For YouTube (built first), see "Flow: publish a Short" in [PUBLISHING_YOUTUBE.md](PUBLISHING_YOUTUBE.md).
 
 1. On a rendered project, the creator clicks **Post to Instagram**.
 2. If no account is connected, they go through Flow 2 and come back here.
@@ -521,6 +527,8 @@ Credits balance = sum of the ledger, so every change is traceable.
 
 ### 11.7 Instagram
 
+YouTube's edge cases (YT-1 to YT-13) are in [PUBLISHING_YOUTUBE.md](PUBLISHING_YOUTUBE.md).
+
 | # | Case | Handling |
 |---|---|---|
 | IG-1 | Personal account | Block at connect time with instructions to switch to Creator or Business. |
@@ -584,7 +592,7 @@ For a learning project these show whether the product works:
 | 5 | Faceless visuals | Pexels clips and FLUX images per scene, swap and upload |
 | 6 | Preview | Remotion player shows the full Reel with captions, overlays and music |
 | 7 | Render | Node render service produces the MP4 and stores it |
-| 8 | Instagram | Connect account and post a Reel to your own account |
+| 8 | Publishing | Connect a YouTube channel and publish a Short (then Instagram: connect an account and post a Reel) |
 | 9 | Credits and dashboard | Ledger, costs shown before actions, refunds, dashboard |
 | 10 | Full AI mode | Reference image, image-to-video clips with mood, duration fixing |
 | 11 | Audio extras | Uploads, transcription, music library and mixing |

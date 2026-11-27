@@ -1,6 +1,6 @@
 from celery import shared_task
 
-from .. import credits, jobs
+from .. import connections, credits, jobs
 
 
 @shared_task(
@@ -21,6 +21,12 @@ def run_job(job_id: str) -> None:
 def fail_stuck_jobs() -> int:
     """Every 5 minutes: jobs past their time limit fail and are refunded (G-11)."""
     return jobs.fail_stuck()
+
+
+@shared_task(name="connections.check", ignore_result=True)
+def check_connections() -> int:
+    """Daily: YouTube connections whose token was revoked or expired show "reconnect" (B6)."""
+    return connections.check_connections()
 
 
 @shared_task(name="credits.reset_monthly", ignore_result=True)

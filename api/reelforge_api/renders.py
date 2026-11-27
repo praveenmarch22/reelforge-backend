@@ -158,7 +158,7 @@ def start_render(project: Project) -> tuple[Render, Job]:
         raise ApiError(
             409,
             "too_short",
-            "Instagram needs Reels of at least 3 seconds. Add to the script.",
+            "Shorts and Reels must be at least 3 seconds long. Add to the script.",
             {"seconds": seconds},
         )
     if project.status in ("rendering", "posting"):

@@ -252,6 +252,8 @@ def _iso(value) -> str | None:
 
 
 def user_json(user: User) -> dict[str, Any]:
+    from .connections import connection_json
+
     credits = user.credit_account
     instagram = user.instagram_account
     return {
@@ -272,6 +274,8 @@ def user_json(user: User) -> dict[str, Any]:
             "monthlyAllowance": credits.monthly_allowance if credits else 0,
             "resetsAt": _iso(credits.resets_at) if credits else None,
         },
+        # Publishing accounts (B6): YouTube first; Instagram is null until B6b.
+        "connections": {"youtube": connection_json(user.youtube_account), "instagram": None},
         "instagram": {
             "connected": instagram is not None,
             "username": instagram.username if instagram else None,

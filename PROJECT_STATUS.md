@@ -1,6 +1,6 @@
 # ReelForge: project status
 
-**Last updated:** 2026-11-28
+**Last updated:** 2026-11-29
 
 This is the single place to see where the project stands. It is updated at the end of every working session. The milestone definitions are in [MILESTONES.md](MILESTONES.md).
 
@@ -36,6 +36,7 @@ Next up: **deploy** (see [DEPLOYMENT_OPTIONS.md](docs/DEPLOYMENT_OPTIONS.md)), t
 | B6b | Publishing: Instagram | Not started | After YouTube, in the same flow |
 | B7 | Full AI mode and audio extras | Not started | AI video clips, uploads, Whisper |
 | B8 | Admin and scheduled tasks | Done | Admin API I1–I14, clean-up of replaced files, purge deletes files first |
+| AP | Daily autopilot | Done locally | One Reel a day from a topic queue (sports legends: football, F1, cricket; global audience), approve-first or automatic. [AUTOPILOT.md](docs/AUTOPILOT.md), [FIX_LOG_AUTOPILOT.md](docs/qa/FIX_LOG_AUTOPILOT.md). Needs the deploy to run daily; no full real run yet |
 | I1 | Connect frontend to the real API | Done | Every screen runs on the real backend (`npm run dev:real`, and production builds); the mock API stays for unit and browser tests |
 | I2 | Deploy | Options compared | [DEPLOYMENT_OPTIONS.md](docs/DEPLOYMENT_OPTIONS.md); nothing deployed yet |
 | I3 | Meta App Review | Not started | With Instagram (B6b) |
@@ -229,3 +230,4 @@ Limits of this round: QA did not run a successful sign-up through the API (the s
 | 2026-11-26 | YouTube publishing decided (YouTube first, Instagram after). Google Cloud project and OAuth client set up with the product owner. B6 built: connect, AI post text, publish. The first real Short published (it came out public). QA found 3 Major and 10 Minor issues, the Tester 7 bugs; all fixed. Docker Desktop's engine hung (machine low on memory) and was restarted with the product owner's OK |
 | 2026-11-27 | Frontend F7 built against the real backend (render and publish screens, YouTube onboarding step, channel pill). Overnight decisions recorded in FIX_LOG_F7. QA found 2 Major and 21 smaller issues over two rounds, the Tester 6 bugs; all fixed. 728 frontend unit tests |
 | 2026-11-28 | B8 (admin API, file clean-up) and F8 (settings, out-of-credits dialog, admin console) built; QA found 1 Blocker and 4 Major in B8, all fixed. Deployment options researched. Architecture document, interview guide and a Docker and Kubernetes hands-on plan written |
+| 2026-11-29 | Azure for Students account created by the product owner (deploy target). Daily autopilot built: topic queue with AI suggestions, a scheduled daily run through script, voice, visuals, render and publish, approval screen. QA found 3 Major, the Tester 5 bugs; fixed |

@@ -72,6 +72,11 @@ def script_input(project: Project, **extra) -> dict:
         # A regenerated script is always written fresh; for a pasted script its text is the topic.
         "topic": project.topic or (project.source_script or "")[:3000]
     }  # fmt: skip
+    from .. import autopilot  # imported here: autopilot imports this module
+
+    if "rules" not in extra and autopilot.is_autopilot(project.id):
+        # A script rewritten for an autopilot Reel keeps the rules for real people (QAP-001).
+        extra["rules"] = list(autopilot.SCRIPT_RULES)
     return {
         **source,
         "tone": project.tone,

@@ -285,6 +285,7 @@ class Script:
             i["style"],
             i["character"],
             i.get("instructions", ""),
+            i.get("rules"),
         )
         return ask(
             "script", prompt, {"topic": i["topic"], "instructions": i.get("instructions", "")}, check_script
@@ -422,6 +423,45 @@ class Caption:
         pass
 
 
+def check_autopilot_topics(allowed: set[str]) -> Callable[[dict], list[dict]]:
+    def check(answer: dict) -> list[dict]:
+        topics = []
+        for item in answer["topics"]:
+            if not isinstance(item, dict) or str(item.get("category", "")).strip().lower() not in allowed:
+                continue
+            subject, angle = clean(item.get("subject"), 80), clean(item.get("angle"), 160)
+            if subject and angle:
+                topics.append(
+                    {"category": str(item["category"]).strip().lower(), "subject": subject, "angle": angle}
+                )
+        if not topics:
+            raise Unusable("no topics")
+        return topics[:30]
+
+    return check
+
+
+class AutopilotTopics:
+    """L3: topics for the daily autopilot, added to the creator's queue. Free."""
+
+    @staticmethod
+    def work(job: Job):
+        i = job.input
+        prompt = prompts.autopilot_topics_prompt(i["mix"], i.get("avoid", []))
+        return ask("autopilot_topics", prompt, {"mix": i["mix"]}, check_autopilot_topics(set(i["mix"])))
+
+    @staticmethod
+    def apply(job: Job, topics: list[dict]) -> dict:
+        from . import autopilot
+
+        added = autopilot.add_topics(job.user_id, topics)
+        return {"added": len(added)}
+
+    @staticmethod
+    def on_stop(job: Job) -> None:
+        pass
+
+
 class Hooks:
     """B9: three alternative opening lines. Choosing one is an ordinary scene edit."""
 
@@ -448,5 +488,6 @@ from .visuals import VisualJob  # noqa: E402
 TYPES = {
     "ideas": Ideas, "script": Script, "rewrite_scene": RewriteScene, "hooks": Hooks,
     "voice": VoiceJob, "visual": VisualJob, "render": RenderJob, "caption": Caption,
+    "autopilot_topics": AutopilotTopics,
     "publish": PublishJob,
 }  # fmt: skip

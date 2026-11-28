@@ -319,7 +319,13 @@ def _make_image(job: Job, settings, *, fallback: bool) -> tuple[dict, str]:
     if not providers:
         raise AllProvidersFailed("image: no image provider is switched on", none_available=True)
     scene_prompt = i["visualPrompt"] or i["stockQuery"] or i["narration"]
-    prompt = image_prompt(scene_prompt, i["mood"], i["style"], i["character"])
+    # An autopilot Reel is about a real person: the image never shows them (QAP-001).
+    from . import autopilot  # imported here: autopilot imports the modules that import this one
+
+    scene_prompt, rule = autopilot.image_prompt_for(job.project_id, scene_prompt)
+    prompt = image_prompt(
+        f"{rule}, {scene_prompt}" if rule else scene_prompt, i["mood"], i["style"], i["character"]
+    )
     result, provider = with_fallback(
         providers, lambda p: p.generate(prompt, i["seed"]), label="image", sleep=_pause_for(settings)
     )

@@ -1,6 +1,6 @@
 from celery import shared_task
 
-from .. import cleanup, connections, credits, jobs
+from .. import autopilot, cleanup, connections, credits, jobs
 
 
 @shared_task(
@@ -21,6 +21,18 @@ def run_job(job_id: str) -> None:
 def fail_stuck_jobs() -> int:
     """Every 5 minutes: jobs past their time limit fail and are refunded (G-11)."""
     return jobs.fail_stuck()
+
+
+@shared_task(name="autopilot.start", ignore_result=True)
+def autopilot_start() -> int:
+    """Hourly: today's Reel is started for every creator whose hour has come (AUTOPILOT.md)."""
+    return autopilot.start_due()
+
+
+@shared_task(name="autopilot.advance", ignore_result=True)
+def autopilot_advance() -> int:
+    """Every 2 minutes: each autopilot run under way moves one step."""
+    return autopilot.advance_all()
 
 
 @shared_task(name="files.clean_replaced", ignore_result=True)

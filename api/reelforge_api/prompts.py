@@ -60,11 +60,19 @@ Reply with JSON only, exactly this shape:
 
 
 def script_prompt(
-    topic: str, tone: str, mode: str, target_seconds: int, style: str, character: str, instructions: str = ""
+    topic: str,
+    tone: str,
+    mode: str,
+    target_seconds: int,
+    style: str,
+    character: str,
+    instructions: str = "",
+    rules: list[str] | None = None,
 ) -> str:
     words = int(target_seconds * WORDS_PER_SECOND)
     scenes = max(3, min(12, round(target_seconds / 6)))
     extra = f"\n{_quoted('EXTRA INSTRUCTIONS', instructions)}\n" if instructions else ""
+    more_rules = "".join(f"- {rule}\n" for rule in rules or [])
     return f"""You write scripts for vertical Instagram Reels narrated by a voiceover. English only.
 
 {_quoted("TOPIC", topic)}
@@ -78,7 +86,7 @@ Rules:
 - Scene 1 is the hook: one short line that makes people stop scrolling.
 - The last scene is a short call to action (follow, save or comment).
 - narration is exactly what the voice says. Plain spoken English, no emojis, no stage directions.
-{_shape(mode)}"""
+{more_rules}{_shape(mode)}"""
 
 
 def split_script_prompt(script: str, tone: str, mode: str, style: str, character: str) -> str:
@@ -135,6 +143,23 @@ Never use the characters < or >.
 
 Reply with JSON only, exactly this shape:
 {{"title": "...", "caption": "...", "hashtags": ["...", "..."]}}"""
+
+
+def autopilot_topics_prompt(mix: dict[str, int], avoid: list[str]) -> str:
+    wanted = ", ".join(f"{n} about {c} legends" for c, n in mix.items())
+    return f"""You plan a YouTube Shorts channel about sports legends for a worldwide English-speaking
+audience. Suggest video topics: {wanted}.
+
+Each topic is one legend and one specific, true, widely documented story about them: a record,
+a comeback, a rivalry, a final, a turning point. Prefer legends known across the world. Vary
+the eras and the countries. Never suggest scandals, private life, injuries to gloat over, or
+anything disputed.
+{_quoted("ALREADY PLANNED (do not repeat)", "; ".join(avoid) or "none")}
+{_SAFETY}
+
+Reply with JSON only, exactly this shape ("category" is one of: {", ".join(mix)}):
+{{"topics": [{{"category": "...", "subject": "the legend's name, max 60 characters",
+  "angle": "the story in one line, max 140 characters"}}]}}"""
 
 
 def hooks_prompt(topic: str, tone: str, first_scene: str) -> str:

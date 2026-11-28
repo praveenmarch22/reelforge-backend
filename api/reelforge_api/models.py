@@ -8,9 +8,9 @@ these classes only describe them to SQLAlchemy. Columns with a database default
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, ForeignKey, Integer, LargeBinary, Numeric, SmallInteger, Text, text
+from sqlalchemy import BigInteger, Date, ForeignKey, Integer, LargeBinary, Numeric, SmallInteger, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY, CITEXT, INET, JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -334,3 +334,37 @@ class ProviderSwitch(db.Model):
     provider: Mapped[str] = mapped_column(Text, primary_key=True)
     enabled: Mapped[bool] = mapped_column(server_default=text("true"))
     reason: Mapped[str] = mapped_column(Text, server_default="")
+
+
+# ---------------------------------------------------------------- daily autopilot (docs/AUTOPILOT.md)
+
+
+class AutopilotSettings(db.Model):
+    __tablename__ = "autopilot_settings"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(server_default=text("false"))
+    mode: Mapped[str] = mapped_column(Text, server_default="approve")
+    run_hour_utc: Mapped[int] = mapped_column(SmallInteger, server_default=text("17"))
+    rotation: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    tone: Mapped[str] = mapped_column(Text, server_default="storytelling")
+    target_seconds: Mapped[int] = mapped_column(SmallInteger, server_default=text("30"))
+    visibility: Mapped[str] = mapped_column(Text, server_default="public")
+    last_run_on: Mapped[date | None] = mapped_column(Date)
+
+
+class AutopilotTopic(db.Model):
+    __tablename__ = "autopilot_topics"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    position: Mapped[int] = mapped_column(Integer)
+    category: Mapped[str] = mapped_column(Text)
+    subject: Mapped[str] = mapped_column(Text)
+    angle: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, server_default="queued")
+    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"))
+    error: Mapped[str | None] = mapped_column(Text)
+    run_on: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = _now()
+    updated_at: Mapped[datetime] = _now()

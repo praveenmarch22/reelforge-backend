@@ -73,6 +73,7 @@ JOB_COSTS = {
     "rewrite_scene": COSTS["rewrite"],
     "hooks": COSTS["hooks"],
     "caption": 0,  # F4 (B6): the post's title, caption and hashtags
+    "autopilot_topics": 0,  # L3: topics for the daily autopilot
 }
 
 

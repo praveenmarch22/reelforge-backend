@@ -36,6 +36,7 @@ log = logging.getLogger(__name__)
 ACTIVE = ("queued", "running")
 QUEUES = {
     "ideas": "llm", "script": "llm", "rewrite_scene": "llm", "hooks": "llm", "caption": "llm",
+    "autopilot_topics": "llm",
     "voice": "voice", "visual": "visuals", "render": "render", "publish": "publish",
 }  # fmt: skip
 # A job running longer than this is treated as stuck and failed (task design rule 3).

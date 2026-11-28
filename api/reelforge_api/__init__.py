@@ -66,6 +66,16 @@ def create_app(settings: Settings | None = None) -> Flask:
                     "schedule": crontab(minute="*/5"),
                     "options": {"queue": "maintenance"},
                 },
+                "autopilot-start": {
+                    "task": "autopilot.start",
+                    "schedule": crontab(minute=2),
+                    "options": {"queue": "maintenance"},
+                },
+                "autopilot-advance": {
+                    "task": "autopilot.advance",
+                    "schedule": crontab(minute="*/2"),
+                    "options": {"queue": "maintenance"},
+                },
                 "clean-replaced-files": {
                     "task": "files.clean_replaced",
                     "schedule": crontab(hour=3, minute=50),
@@ -126,6 +136,7 @@ def create_app(settings: Settings | None = None) -> Flask:
         scenes,
         system,
     )
+    from .routes import autopilot as autopilot_routes
 
     for blueprint in (
         system.bp,
@@ -138,6 +149,7 @@ def create_app(settings: Settings | None = None) -> Flask:
         renders.bp,
         publishing.bp,
         admin.bp,
+        autopilot_routes.bp,
     ):
         app.register_blueprint(blueprint, url_prefix=API_PREFIX + (blueprint.url_prefix or ""))
     register_cli(app)

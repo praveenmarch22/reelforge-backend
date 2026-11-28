@@ -51,6 +51,8 @@ def test_the_background_tasks_and_their_schedule_are_registered(app):
         "jobs.fail_stuck": "maintenance",
         "credits.reset_monthly": "maintenance",
         "connections.check": "maintenance",
+        "autopilot.start": "maintenance",
+        "autopilot.advance": "maintenance",
         "files.clean_replaced": "maintenance",  # B8
     }
     assert set(scheduled) <= set(celery.tasks)

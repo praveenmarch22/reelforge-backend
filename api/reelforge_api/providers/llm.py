@@ -179,6 +179,19 @@ class MockLLM:
             "on_screen_text": c.get("on_screen_text") or "The point",
         }
 
+    def _autopilot_topics(self, c: dict) -> dict:
+        return {
+            "topics": [
+                {
+                    "category": category,
+                    "subject": f"{category.title()} Legend {i}",
+                    "angle": f"The day story {i} happened",
+                }
+                for category, count in c["mix"].items()
+                for i in range(1, count + 1)
+            ]
+        }
+
     def _caption(self, c: dict) -> dict:
         topic = c.get("topic") or c.get("title") or "this"
         return {

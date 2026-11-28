@@ -1,0 +1,150 @@
+# ReelForge on one server (docs/DEPLOY_AZURE.md). Everything runs here; only Caddy is public.
+#
+#   cp .env.production.example .env.production      then fill it in
+#   docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+#
+# Differences from docker-compose.yml (development): no source folders are mounted, the API
+# runs under Gunicorn, images have no test tools, nothing but ports 80 and 443 is published,
+# every secret comes from .env.production, and containers restart after a reboot.
+#
+# It expects the web app's repository beside this one (../frontend).
+
+x-api: &api
+  build:
+    context: ./api
+    args:
+      REQUIREMENTS: requirements.txt
+  restart: unless-stopped
+  env_file: .env.production
+  environment: &api-env
+    ENV: production
+    DATABASE_URL: postgresql+psycopg://reelforge:${POSTGRES_PASSWORD}@postgres:5432/reelforge
+    REDIS_URL: redis://redis:6379/0
+    # Inside the server, files are reached directly; the browser gets links at the public address.
+    S3_ENDPOINT_URL: http://minio:9000
+    S3_PUBLIC_ENDPOINT_URL: https://${DOMAIN}
+    WEB_ORIGIN: https://${DOMAIN}
+    YOUTUBE_REDIRECT_URI: https://${DOMAIN}/api/v1/connections/youtube/callback
+    RENDER_SERVICE_URL: http://renderer:3000
+    EMAIL_PROVIDER: smtp
+    SMTP_STARTTLS: "true"
+    # Caddy is the one proxy in front of the API (real client addresses for the rate limits).
+    TRUSTED_PROXY_HOPS: "1"
+  logging: &logging
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+services:
+  web:
+    # Caddy with the built web app inside: HTTPS, and the routes to the API and to storage.
+    build: ../frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      S3_BUCKET: ${S3_BUCKET:-reelforge-media}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data # the HTTPS certificates
+      - caddy-config:/config
+    depends_on:
+      api: {condition: service_healthy}
+    logging: *logging
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: reelforge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: reelforge
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reelforge -d reelforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Saved to disk, so queued jobs survive a restart.
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:bd92a45b821c0d85772c607ed7b49693efe78b3ffffae301b5d1b0981660de22
+    restart: unless-stopped
+    command: server /data
+    user: "0:0"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    volumes:
+      - minio-data:/data
+    logging: *logging
+
+  api:
+    <<: *api
+    # Migrations and the bucket first, then the API under Gunicorn.
+    command: >
+      sh -c "flask db upgrade && flask storage-init &&
+             gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 60 wsgi:app"
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      minio: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/api/v1/health', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  worker:
+    <<: *api
+    # General work and the scheduler (-B). Exactly one of these runs.
+    command: celery -A wsgi:celery_app worker -B -s /tmp/celerybeat-schedule --loglevel INFO --concurrency 2 -Q default,llm,voice,visuals,ai_video,maintenance
+    depends_on:
+      api: {condition: service_healthy}
+
+  render-worker:
+    <<: *api
+    command: celery -A wsgi:celery_app worker -n render@%h --loglevel INFO --concurrency 1 --prefetch-multiplier 1 -Q render
+    depends_on:
+      api: {condition: service_healthy}
+
+  publish-worker:
+    <<: *api
+    command: celery -A wsgi:celery_app worker -n publish@%h --loglevel INFO --concurrency 2 --prefetch-multiplier 1 -Q publish
+    depends_on:
+      api: {condition: service_healthy}
+
+  renderer:
+    build: ./renderer
+    restart: unless-stopped
+    shm_size: 1gb
+    environment:
+      RENDER_SERVICE_TOKEN: ${RENDER_SERVICE_TOKEN}
+      # 720x1280: about twice as fast as full size on a small server. "1" renders 1080x1920.
+      RENDER_SCALE: "${RENDER_SCALE:-2/3}"
+      RENDER_ALLOWED_ORIGINS: http://minio:9000
+    logging: *logging
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  caddy-data:
+  caddy-config:

@@ -38,7 +38,7 @@ Next up: **deploy** (see [DEPLOYMENT_OPTIONS.md](docs/DEPLOYMENT_OPTIONS.md)), t
 | B8 | Admin and scheduled tasks | Done | Admin API I1–I14, clean-up of replaced files, purge deletes files first |
 | AP | Daily autopilot | Done locally | One Reel a day from a topic queue (sports legends: football, F1, cricket; global audience), approve-first or automatic. [AUTOPILOT.md](docs/AUTOPILOT.md), [FIX_LOG_AUTOPILOT.md](docs/qa/FIX_LOG_AUTOPILOT.md). Needs the deploy to run daily; no full real run yet |
 | I1 | Connect frontend to the real API | Done | Every screen runs on the real backend (`npm run dev:real`, and production builds); the mock API stays for unit and browser tests |
-| I2 | Deploy | Options compared | [DEPLOYMENT_OPTIONS.md](docs/DEPLOYMENT_OPTIONS.md); nothing deployed yet |
+| I2 | Deploy | Ready to deploy | Production Compose file, Caddy (HTTPS), web image and env generator, tested locally as `https://localhost`. Guide: [DEPLOY_AZURE.md](docs/DEPLOY_AZURE.md). Not deployed yet |
 | I3 | Meta App Review | Not started | With Instagram (B6b) |
 
 ## What exists today
